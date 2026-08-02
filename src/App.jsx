@@ -1554,7 +1554,7 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
 
       {/* Notes */}
       <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>NOTES (persists across every stage)</div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>NOTES</div>
         <textarea value={crm.notes} onChange={e => onNotes(e.target.value)} placeholder="What does this owner need? What did they say last call?"
           style={{ width: "100%", minHeight: 90, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 12, color: "var(--text)", fontSize: 13, resize: "vertical" }} />
       </div>
