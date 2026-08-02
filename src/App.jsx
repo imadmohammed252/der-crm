@@ -36,6 +36,10 @@ const THEME = `
 .rcrm input:focus, .rcrm textarea:focus, .rcrm select:focus{ border-color:var(--accent); }
 .rcrm *:focus-visible{ outline:1px solid var(--accent); outline-offset:2px; }
 .tap{ min-height:44px; }
+.sweep-btn{ position:relative; overflow:hidden; }
+.sweep-btn::before{ content:""; position:absolute; inset:0; background:var(--sweep-color); transform:scaleX(0); transform-origin:left; transition:transform 0.28s ease; z-index:0; }
+.sweep-btn:hover::before{ transform:scaleX(1); }
+.sweep-btn:hover{ color:var(--gray) !important; }
 `;
 
 /* ---------------------------------------------------------
@@ -1555,8 +1559,14 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
       {/* Notes */}
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>NOTES</div>
-        <textarea value={crm.notes} onChange={e => onNotes(e.target.value)} placeholder="What does this owner need? What did they say last call?"
-          style={{ width: "100%", minHeight: 90, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 12, color: "var(--text)", fontSize: 13, resize: "vertical" }} />
+        <div style={{ position: "relative" }}>
+          <textarea value={crm.notes} onChange={e => onNotes(e.target.value)} placeholder="What does this owner need? What did they say last call?"
+            style={{ width: "100%", minHeight: 90, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 12, paddingBottom: 34, color: "var(--text)", fontSize: 13, resize: "vertical" }} />
+          <button onClick={() => onNotes("")} className="sweep-btn" title="Clear notes"
+            style={{ position: "absolute", right: 8, bottom: 8, display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, background: "transparent", border: "1px solid var(--line)", borderRadius: 4, color: "var(--text-dim)", cursor: "pointer", "--sweep-color": "var(--red)" }}>
+            <span style={{ position: "relative", zIndex: 1, display: "flex" }}><X size={13} /></span>
+          </button>
+        </div>
       </div>
 
       {/* Outcome logging */}
@@ -1611,12 +1621,14 @@ function ScoreBar({ label, value, colorVar }) {
 
 function OutcomeBtn({ icon: Icon, label, color, onClick }) {
   return (
-    <button onClick={onClick} className="tap" style={{
-      display: "flex", alignItems: "center", gap: 7, background: "transparent", border: `1px solid ${color}66`,
+    <button onClick={onClick} className="tap sweep-btn" style={{
+      display: "flex", alignItems: "center", gap: 7, background: "transparent", border: "1px solid var(--line)",
       color, padding: "11px 14px", borderRadius: 5, fontSize: 10.5, fontWeight: 600,
-      textTransform: "uppercase", letterSpacing: "0.1em"
+      textTransform: "uppercase", letterSpacing: "0.1em", "--sweep-color": color
     }}>
-      <Icon size={14} /> {label}
+      <span style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 7 }}>
+        <Icon size={14} /> {label}
+      </span>
     </button>
   );
 }
