@@ -40,8 +40,10 @@ const THEME = `
 .sweep-btn::before{ content:""; position:absolute; inset:0; background:var(--sweep-color); transform:scaleX(0); transform-origin:left; transition:transform 0.24s ease; z-index:0; }
 .sweep-btn:hover::before{ transform:scaleX(1); }
 .sweep-btn:hover{ color:#000000 !important; }
-.invert-btn{ transition: transform 0.18s ease; }
-.invert-btn:hover{ filter: invert(1); transform: scale(1.08); }
+.pulse-btn{ transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.16s ease, color 0.16s ease; }
+.pulse-btn:hover{ transform: scale(1.06); }
+.login-pulse:hover{ background: var(--bg); color: var(--accent); }
+.logout-pulse:hover{ background: var(--accent); color: #000000; }
 `;
 
 /* ---------------------------------------------------------
@@ -461,7 +463,7 @@ function LoginScreen({ users, onLogin }) {
               {error}
             </div>
           )}
-          <button type="button" onClick={submit} className="tap invert-btn"
+          <button type="button" onClick={submit} className="tap pulse-btn login-pulse"
             style={{ marginTop: 8, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 5, padding: "13px", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.14em" }}>
             Log in
           </button>
@@ -512,7 +514,7 @@ function TopBar({ title, subtitle, right, onLogout, saving, extraMenuItems }) {
               pointerEvents: settingsOpen ? "auto" : "none",
             }}>
               {items.map((it, i) => (
-                <button key={i} onClick={() => { it.onClick(); setSettingsOpen(false); }} className={`tap${it.label === "Log out" ? " invert-btn" : ""}`}
+                <button key={i} onClick={() => { it.onClick(); setSettingsOpen(false); }} className={`tap${it.label === "Log out" ? " pulse-btn logout-pulse" : ""}`}
                   style={{
                     display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
                     background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)",
