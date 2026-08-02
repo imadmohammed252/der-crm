@@ -337,7 +337,7 @@ function buildSample() {
 export default function App() {
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loggedInUsername, setLoggedInUsername] = useState(null);
+  const [loggedInUsername, setLoggedInUsername] = useState(() => localStorage.getItem("der-crm-user") || null);
   const [saving, setSaving] = useState(false);
 
   const saveTimerRef = useRef(null);
@@ -390,15 +390,15 @@ export default function App() {
   const currentUser = loggedInUsername ? state.users[loggedInUsername] : null;
 
   if (!currentUser) {
-    return <LoginScreen users={state.users} onLogin={setLoggedInUsername} />;
+    return <LoginScreen users={state.users} onLogin={(u) => { localStorage.setItem("der-crm-user", u); setLoggedInUsername(u); }} />;
   }
 
   return (
     <div className="rcrm" style={{ minHeight: 640, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <style>{THEME}</style>
       {currentUser.role === "admin"
-        ? <AdminApp state={state} setState={persist} onLogout={() => setLoggedInUsername(null)} saving={saving} />
-        : <UserApp state={state} setState={persist} user={currentUser.username} onLogout={() => setLoggedInUsername(null)} saving={saving} />}
+        ? <AdminApp state={state} setState={persist} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />
+        : <UserApp state={state} setState={persist} user={currentUser.username} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />}
     </div>
   );
 }
