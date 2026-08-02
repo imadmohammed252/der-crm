@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import {
   Building2, Search, Upload, LogOut, ArrowRightLeft, Phone,
   PhoneMissed, PhoneOff, Check, X, Clock, ChevronRight, RefreshCcw,
-  Users, LayoutGrid, ClipboardList, AlertTriangle, Trash2, Settings
+  Users, LayoutGrid, ClipboardList, AlertTriangle, Trash2, Settings, Eye, EyeOff
 } from "lucide-react";
 
 /* ---------------------------------------------------------
@@ -41,7 +41,7 @@ const THEME = `
 .sweep-btn:hover::before{ transform:scaleX(1); }
 .sweep-btn:hover{ color:#000000 !important; }
 .pulse-btn{ transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.28s ease, color 0.28s ease, font-weight 0.28s ease, border-color 0.28s ease; }
-.pulse-btn:hover{ transform: scale(1.05); font-weight: 1000; }
+.pulse-btn:hover{ transform: scale(1.15); font-weight: 1000; }
 .login-pulse:hover{ background: var(--bg) !important; color: var(--accent) !important; border-color: var(--text-dim) !important; }
 .logout-pulse:hover{ background: var(--accent) !important; color: #000000 !important; }
 `;
@@ -417,6 +417,7 @@ export default function App() {
 function LoginScreen({ users, onLogin }) {
   const [username, setUsername] = useState("");
   const [passkey, setPasskey] = useState("");
+  const [showPasskey, setShowPasskey] = useState(false);
   const [error, setError] = useState("");
 
   const submit = () => {
@@ -453,15 +454,17 @@ function LoginScreen({ users, onLogin }) {
             <input value={username} onChange={e => { setUsername(e.target.value); setError(""); }} onKeyDown={onKeyDown} autoFocus
               className="tap" style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid var(--line)", color: "var(--text)", padding: "8px 0", fontSize: 15, outline: "none" }} />
           </div>
-          <div>
+         <div>
             <div className="eyebrow" style={{ marginBottom: 6 }}>Passkey</div>
-            <input type="password" value={passkey} onChange={e => { setPasskey(e.target.value); setError(""); }} onKeyDown={onKeyDown}
-              className="tap" style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid var(--line)", color: "var(--text)", padding: "8px 0", fontSize: 15, outline: "none" }} />
-          </div>
-          {error && (
-            <div style={{ borderLeft: "2px solid var(--accent)", background: "var(--accent-dim)", color: "var(--text)", padding: "10px 12px", fontSize: 12.5 }}>
-              {error}
+            <div style={{ position: "relative" }}>
+              <input type={showPasskey ? "text" : "password"} value={passkey} onChange={e => { setPasskey(e.target.value); setError(""); }} onKeyDown={onKeyDown}
+                className="tap" style={{ width: "100%", background: "transparent", border: "none", borderBottom: "1px solid var(--line)", color: "var(--text)", padding: "8px 24px 8px 0", fontSize: 15, outline: "none" }} />
+              <button type="button" onClick={() => setShowPasskey(v => !v)} tabIndex={-1}
+                style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", display: "flex", alignItems: "center", padding: 4 }}>
+                {showPasskey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
+          </div>
           )}
           <button type="button" onClick={submit} className="tap pulse-btn login-pulse"
             style={{ marginTop: 8, background: "var(--accent)", color: "#fff", border: "1px solid transparent", borderRadius: 5, padding: "13px", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.14em" }}>
