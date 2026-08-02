@@ -40,9 +40,9 @@ const THEME = `
 .sweep-btn::before{ content:""; position:absolute; inset:0; background:var(--sweep-color); transform:scaleX(0); transform-origin:left; transition:transform 0.24s ease; z-index:0; }
 .sweep-btn:hover::before{ transform:scaleX(1); }
 .sweep-btn:hover{ color:#000000 !important; }
-.pulse-btn{ transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.2s ease, color 0.2s ease; }
-.pulse-btn:hover{ transform: scale(1.05); }
-.login-pulse:hover{ background: var(--bg) !important; color: var(--accent) !important; }
+.pulse-btn{ transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.28s ease, color 0.28s ease, font-weight 0.28s ease, border-color 0.28s ease; }
+.pulse-btn:hover{ transform: scale(1.05); font-weight: 800; }
+.login-pulse:hover{ background: var(--bg) !important; color: var(--accent) !important; border-color: var(--text-dim) !important; }
 .logout-pulse:hover{ background: var(--accent) !important; color: #000000 !important; }
 `;
 
@@ -464,7 +464,7 @@ function LoginScreen({ users, onLogin }) {
             </div>
           )}
           <button type="button" onClick={submit} className="tap pulse-btn login-pulse"
-            style={{ marginTop: 8, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 5, padding: "13px", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.14em" }}>
+            style={{ marginTop: 8, background: "var(--accent)", color: "#fff", border: "1px solid transparent", borderRadius: 5, padding: "13px", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.14em" }}>
             Log in
           </button>
         </div>
