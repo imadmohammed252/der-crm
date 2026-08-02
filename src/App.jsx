@@ -394,7 +394,7 @@ export default function App() {
   }
 
   return (
-    <div className="rcrm" style={{ minHeight: 640, background: "var(--bg)", display: "flex", flexDirection: "column" }}>
+    <div className="rcrm" style={{ height: "100vh", overflow: "hidden", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <style>{THEME}</style>
       {currentUser.role === "admin"
         ? <AdminApp state={state} setState={persist} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />
