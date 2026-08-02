@@ -32,7 +32,7 @@ const THEME = `
 .rcrm ::-webkit-scrollbar-thumb:hover{ background:var(--text-faint); }
 .rcrm button{ font-family:inherit; cursor:pointer; transition:background 0.12s, border-color 0.12s; }
 .rcrm button:disabled{ cursor:not-allowed; opacity:0.4; }
-.rcrm input, .rcrm textarea, .rcrm select{ font-family:inherit; }
+.rcrm input, .rcrm textarea, .rcrm select{ font-family:inherit; box-sizzing: border-box;}
 .rcrm input:focus, .rcrm textarea:focus, .rcrm select:focus{ border-color:var(--accent); }
 .rcrm *:focus-visible{ outline:1px solid var(--accent); outline-offset:2px; }
 .tap{ min-height:44px; }
