@@ -41,7 +41,7 @@ const THEME = `
 .sweep-btn:hover::before{ transform:scaleX(1); }
 .sweep-btn:hover{ color:#000000 !important; }
 .pulse-btn{ transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.28s ease, color 0.28s ease, font-weight 0.28s ease, border-color 0.28s ease; }
-.pulse-btn:hover{ transform: scale(1.05); font-weight: 800; }
+.pulse-btn:hover{ transform: scale(1.05); font-weight: 1000; }
 .login-pulse:hover{ background: var(--bg) !important; color: var(--accent) !important; border-color: var(--text-dim) !important; }
 .logout-pulse:hover{ background: var(--accent) !important; color: #000000 !important; }
 `;
