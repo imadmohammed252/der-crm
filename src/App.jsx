@@ -465,8 +465,13 @@ function LoginScreen({ users, onLogin }) {
               </button>
             </div>
           </div>
+          {error && (
+            <div style={{ borderLeft: "2px solid var(--accent)", background: "var(--accent-dim)", color: "var(--text)", padding: "10px 12px", fontSize: 12.5 }}>
+              {error}
+            </div>
           )}
           <button type="button" onClick={submit} className="tap pulse-btn login-pulse"
+
             style={{ marginTop: 8, background: "var(--accent)", color: "#fff", border: "1px solid transparent", borderRadius: 5, padding: "13px", fontSize: 12, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.14em" }}>
             Log in
           </button>
