@@ -37,7 +37,7 @@ const THEME = `
 .rcrm *:focus-visible{ outline:1px solid var(--accent); outline-offset:2px; }
 .tap{ min-height:44px; }
 .sweep-btn{ position:relative; overflow:hidden; }
-.sweep-btn::before{ content:""; position:absolute; inset:0; background:var(--sweep-color); transform:scaleX(0); transform-origin:left; transition:transform 0.2s ease; z-index:0; }
+.sweep-btn::before{ content:""; position:absolute; inset:0; background:var(--sweep-color); transform:scaleX(0); transform-origin:left; transition:transform 0.24s ease; z-index:0; }
 .sweep-btn:hover::before{ transform:scaleX(1); }
 .sweep-btn:hover{ color:#000000 !important; }
 `;
