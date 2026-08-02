@@ -880,7 +880,7 @@ function BuildingsUpload({ state, setState }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 780 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 780 , margin: "0 auto" }}>
       <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 18 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>1. Create or pick a building</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -959,7 +959,7 @@ function AssignmentPanel({ state, setState }) {
   if (!agents.length) return <div style={{ color: "var(--text-dim)", fontSize: 13.5 }}>No agent logins yet. Create one in the Users tab first.</div>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 900 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 900 , margin: "0 auto" }}>
       {buildings.map(b => {
         const bUnits = units.filter(u => u.buildingId === b.id);
         const buildingAssigned = state.assignments[b.id] || [];
@@ -1032,7 +1032,7 @@ function UsersPanel({ state, setState }) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 620 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 620 , margin: "0 auto" }}>
       <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 18 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Create a login</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
