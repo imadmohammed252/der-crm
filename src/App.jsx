@@ -40,10 +40,10 @@ const THEME = `
 .sweep-btn::before{ content:""; position:absolute; inset:0; background:var(--sweep-color); transform:scaleX(0); transform-origin:left; transition:transform 0.24s ease; z-index:0; }
 .sweep-btn:hover::before{ transform:scaleX(1); }
 .sweep-btn:hover{ color:#000000 !important; }
-.pulse-btn{ transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.16s ease, color 0.16s ease; }
-.pulse-btn:hover{ transform: scale(1.06); }
-.login-pulse:hover{ background: var(--bg); color: var(--accent); }
-.logout-pulse:hover{ background: var(--accent); color: #000000; }
+.pulse-btn{ transition: transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1), background-color 0.2s ease, color 0.2s ease; }
+.pulse-btn:hover{ transform: scale(1.05); }
+.login-pulse:hover{ background: var(--bg) !important; color: var(--accent) !important; }
+.logout-pulse:hover{ background: var(--accent) !important; color: #000000 !important; }
 `;
 
 /* ---------------------------------------------------------
