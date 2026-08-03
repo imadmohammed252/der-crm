@@ -603,10 +603,10 @@ function StatsBlock({ calls, users }) {
   const agentNames = Object.keys(byAgent).sort();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div>
-        <div style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Total calls</div>
-        <div style={{ fontSize: 34, fontWeight: 800 }}>{calls.length}</div>
+        <div style={{ fontSize: 12, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Total calls</div>
+        <div style={{ fontSize: 64, fontWeight: 800, lineHeight: 1 }}>{calls.length}</div>
       </div>
       {agentNames.length === 0 ? (
         <div style={{ color: "var(--text-dim)", fontSize: 13 }}>No calls logged in this range.</div>
@@ -614,7 +614,7 @@ function StatsBlock({ calls, users }) {
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {agentNames.map(agent => (
             <button key={agent} onClick={() => setSelectedAgent(selectedAgent === agent ? null : agent)} className="tap"
-              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "10px 14px", color: "var(--text)", fontSize: 13, textAlign: "left" }}>
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left" }}>
               <span>{users[agent]?.displayName || agent}</span>
               <span style={{ fontWeight: 700 }}>{byAgent[agent].length} calls</span>
             </button>
@@ -624,7 +624,7 @@ function StatsBlock({ calls, users }) {
       {selectedAgent && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 4 }}>
           {["yes", "callMeBack", "no", "noAnswer"].map(outcome => (
-            <div key={outcome} style={{ display: "flex", justifyContent: "space-between", padding: "6px 4px", fontSize: 12.5, borderBottom: "1px solid var(--line)" }}>
+            <div key={outcome} style={{ display: "flex", justifyContent: "space-between", padding: "8px 4px", fontSize: 13, borderBottom: "1px solid var(--line)" }}>
               <span style={{ color: "var(--text-dim)" }}>{OUTCOME_LABEL[outcome]}</span>
               <span>{byAgent[selectedAgent].filter(c => c.outcome === outcome).length}</span>
             </div>
@@ -636,6 +636,7 @@ function StatsBlock({ calls, users }) {
 }
 
 function TrackingPanel({ state }) {
+  const [mode, setMode] = useState("date");
   const [singleDate, setSingleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [period, setPeriod] = useState("week");
   const [rangeStart, setRangeStart] = useState("");
@@ -676,41 +677,52 @@ function TrackingPanel({ state }) {
     return log.filter(c => { const t = new Date(c.timestamp); return t >= start && t <= end; });
   }, [log, rangeApplied]);
 
+  const activeCalls = mode === "date" ? singleDateCalls : mode === "period" ? periodCalls : rangeCalls;
+  const periodLabels = { week: "This week", month: "This month", lastMonth: "Last month", allTime: "Since the beginning" };
+  const activeLabel = mode === "date"
+    ? new Date(singleDate + "T00:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+    : mode === "period"
+    ? periodLabels[period]
+    : rangeApplied ? `${rangeApplied.start} to ${rangeApplied.end}` : "Custom range";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 36, maxWidth: 700, margin: "0 auto" }}>
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Specific date</div>
-        <input type="date" value={singleDate} onChange={e => setSingleDate(e.target.value)} className="tap"
-          style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13, marginBottom: 16 }} />
-        <StatsBlock calls={singleDateCalls} users={state.users} />
+    <div style={{ display: "flex", gap: 40, alignItems: "flex-start" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>{activeLabel}</div>
+        <StatsBlock calls={activeCalls} users={state.users} />
       </div>
 
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Period</div>
-        <select value={period} onChange={e => setPeriod(e.target.value)} className="tap"
-          style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13, marginBottom: 16 }}>
-          <option value="week">This week</option>
-          <option value="month">This month</option>
-          <option value="lastMonth">Last month</option>
-          <option value="allTime">Since the beginning</option>
-        </select>
-        <StatsBlock calls={periodCalls} users={state.users} />
-      </div>
-
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Custom range</div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-          <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className="tap"
-            style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13 }} />
-          <span style={{ color: "var(--text-dim)", fontSize: 13 }}>to</span>
-          <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className="tap"
-            style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13 }} />
-          <button onClick={() => rangeStart && rangeEnd && setRangeApplied({ start: rangeStart, end: rangeEnd })} className="tap"
-            style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-            View
-          </button>
+      <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
+        <div onClick={() => setMode("date")} style={{ padding: 14, borderRadius: 8, border: mode === "date" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Specific date</div>
+          <input type="date" value={singleDate} onChange={e => { setSingleDate(e.target.value); setMode("date"); }} className="tap"
+            style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }} />
         </div>
-        {rangeApplied ? <StatsBlock calls={rangeCalls} users={state.users} /> : <div style={{ color: "var(--text-dim)", fontSize: 13 }}>Pick a start and end date, then click View.</div>}
+
+        <div onClick={() => setMode("period")} style={{ padding: 14, borderRadius: 8, border: mode === "period" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Period</div>
+          <select value={period} onChange={e => { setPeriod(e.target.value); setMode("period"); }} className="tap"
+            style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }}>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+            <option value="lastMonth">Last month</option>
+            <option value="allTime">Since the beginning</option>
+          </select>
+        </div>
+
+        <div style={{ padding: 14, borderRadius: 8, border: mode === "range" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)" }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Custom range</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className="tap"
+              style={{ background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }} />
+            <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className="tap"
+              style={{ background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }} />
+            <button onClick={() => { if (rangeStart && rangeEnd) { setRangeApplied({ start: rangeStart, end: rangeEnd }); setMode("range"); } }} className="tap"
+              style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "8px 10px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              View
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
