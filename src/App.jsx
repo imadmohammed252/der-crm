@@ -179,6 +179,7 @@ const BUCKET_LABEL = {
   unreachable: "Unreachable",
   yes: "Active Client",
 };
+const OUTCOME_LABEL = { yes: "Yes", callMeBack: "Call Me Back", no: "No / Declined", noAnswer: "No Answer" };
 const BUCKET_COLOR = {
   toBeCalled: "var(--accent)",
   callMeBack: "var(--amber)",
@@ -261,12 +262,12 @@ async function loadState() {
       const parsed = data.data;
       if (!parsed.users || Object.keys(parsed.users).length === 0) parsed.users = DEFAULT_USERS;
       // fill any missing top-level keys so older data doesn't crash newer code
-      return { buildings: {}, units: {}, assignments: {}, crm: {}, users: DEFAULT_USERS, ...parsed };
+      return { buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: DEFAULT_USERS, ...parsed };
     }
   } catch (e) {
     console.error("loadState failed, using empty state:", e);
   }
-  return { buildings: {}, units: {}, assignments: {}, crm: {}, users: DEFAULT_USERS };
+  return { buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: DEFAULT_USERS };
 }
 
 async function saveState(state) {
@@ -557,7 +558,7 @@ function AdminApp({ state, setState, onLogout, saving }) {
   const [confirmingWipe, setConfirmingWipe] = useState(false);
   const buildings = Object.values(state.buildings);
 
-  const wipeAll = () => setState({ buildings: {}, units: {}, assignments: {}, crm: {}, users: state.users });
+  const wipeAll = () => setState({ buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: state.users });
 
   return (
     <>
@@ -575,7 +576,7 @@ function AdminApp({ state, setState, onLogout, saving }) {
         </div>
       )}
       <div style={{ display: "flex", borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
-        {[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"]].map(([id, label]) => (
+        {[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"], ["tracking", "Tracking"]].map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} className="tap"
             style={{
               padding: "13px 18px", background: "transparent", border: "none",
@@ -589,8 +590,129 @@ function AdminApp({ state, setState, onLogout, saving }) {
         {tab === "buildings" && <BuildingsUpload state={state} setState={setState} />}
         {tab === "assign" && <AssignmentPanel state={state} setState={setState} />}
         {tab === "users" && <UsersPanel state={state} setState={setState} />}
+        {tab === "tracking" && <TrackingPanel state={state} />}
       </div>
     </>
+  );
+}
+
+function StatsBlock({ calls, users }) {
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const byAgent = {};
+  calls.forEach(c => { byAgent[c.agent] = byAgent[c.agent] || []; byAgent[c.agent].push(c); });
+  const agentNames = Object.keys(byAgent).sort();
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <div style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Total calls</div>
+        <div style={{ fontSize: 34, fontWeight: 800 }}>{calls.length}</div>
+      </div>
+      {agentNames.length === 0 ? (
+        <div style={{ color: "var(--text-dim)", fontSize: 13 }}>No calls logged in this range.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {agentNames.map(agent => (
+            <button key={agent} onClick={() => setSelectedAgent(selectedAgent === agent ? null : agent)} className="tap"
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "10px 14px", color: "var(--text)", fontSize: 13, textAlign: "left" }}>
+              <span>{users[agent]?.displayName || agent}</span>
+              <span style={{ fontWeight: 700 }}>{byAgent[agent].length} calls</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {selectedAgent && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 4 }}>
+          {["yes", "callMeBack", "no", "noAnswer"].map(outcome => (
+            <div key={outcome} style={{ display: "flex", justifyContent: "space-between", padding: "6px 4px", fontSize: 12.5, borderBottom: "1px solid var(--line)" }}>
+              <span style={{ color: "var(--text-dim)" }}>{OUTCOME_LABEL[outcome]}</span>
+              <span>{byAgent[selectedAgent].filter(c => c.outcome === outcome).length}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TrackingPanel({ state }) {
+  const [singleDate, setSingleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [period, setPeriod] = useState("week");
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd] = useState("");
+  const [rangeApplied, setRangeApplied] = useState(null);
+
+  const log = state.callLog || [];
+
+  const singleDateCalls = useMemo(() => {
+    if (!singleDate) return [];
+    return log.filter(c => new Date(c.timestamp).toDateString() === new Date(singleDate + "T00:00:00").toDateString());
+  }, [log, singleDate]);
+
+  const periodCalls = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let start = null, end = null;
+    if (period === "week") {
+      start = new Date(startOfToday); start.setDate(start.getDate() - start.getDay());
+      end = new Date(start); end.setDate(end.getDate() + 7);
+    } else if (period === "month") {
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    } else if (period === "lastMonth") {
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    return log.filter(c => {
+      const t = new Date(c.timestamp);
+      return (!start || t >= start) && (!end || t < end);
+    });
+  }, [log, period]);
+
+  const rangeCalls = useMemo(() => {
+    if (!rangeApplied) return [];
+    const start = new Date(rangeApplied.start + "T00:00:00");
+    const end = new Date(rangeApplied.end + "T23:59:59");
+    return log.filter(c => { const t = new Date(c.timestamp); return t >= start && t <= end; });
+  }, [log, rangeApplied]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 36, maxWidth: 700, margin: "0 auto" }}>
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Specific date</div>
+        <input type="date" value={singleDate} onChange={e => setSingleDate(e.target.value)} className="tap"
+          style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13, marginBottom: 16 }} />
+        <StatsBlock calls={singleDateCalls} users={state.users} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Period</div>
+        <select value={period} onChange={e => setPeriod(e.target.value)} className="tap"
+          style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13, marginBottom: 16 }}>
+          <option value="week">This week</option>
+          <option value="month">This month</option>
+          <option value="lastMonth">Last month</option>
+          <option value="allTime">Since the beginning</option>
+        </select>
+        <StatsBlock calls={periodCalls} users={state.users} />
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>Custom range</div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
+          <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className="tap"
+            style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13 }} />
+          <span style={{ color: "var(--text-dim)", fontSize: 13 }}>to</span>
+          <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className="tap"
+            style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 12px", color: "var(--text)", fontSize: 13 }} />
+          <button onClick={() => rangeStart && rangeEnd && setRangeApplied({ start: rangeStart, end: rangeEnd })} className="tap"
+            style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+            View
+          </button>
+        </div>
+        {rangeApplied ? <StatsBlock calls={rangeCalls} users={state.users} /> : <div style={{ color: "var(--text-dim)", fontSize: 13 }}>Pick a start and end date, then click View.</div>}
+      </div>
+    </div>
   );
 }
 
@@ -1173,7 +1295,8 @@ function UserApp({ state, setState, user, onLogout, saving }) {
   };
   const logOutcome = (key, outcome) => {
     const crm = applyOutcome(state.crm[key] || defaultCrm(), outcome);
-    setState({ ...state, crm: { ...state.crm, [key]: crm } });
+    const entry = { unit: key, agent: user, outcome, timestamp: new Date().toISOString() };
+    setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: [...(state.callLog || []), entry] });
   };
   // Deliberate manual override for a misclick — pulls a unit out of
   // whichever bucket it landed in (Call Me Back, No Answer, Reject, Active)
