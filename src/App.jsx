@@ -716,16 +716,16 @@ function StatsBlock({ calls, users, state }) {
             const pct = assignedUnits.length ? Math.round((completedUnits.length / assignedUnits.length) * 100) : 0;
             return (
               <div key={agent} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, overflow: "hidden" }}>
-                <button onClick={() => setExpandedAgent(isOpen ? null : agent)} className="tap"
-                  style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left", cursor: "pointer", gap: 12 }}>
-                  <span style={{ whiteSpace: "nowrap" }}>{users[agent]?.displayName || agent}</span>
+               <button onClick={() => setExpandedAgent(isOpen ? null : agent)} className="tap"
+                  style={{ display: "grid", gridTemplateColumns: "100px 1fr 70px", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left", cursor: "pointer", gap: 12 }}>
+                  <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{users[agent]?.displayName || agent}</span>
                   <div style={{ justifySelf: "center", display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 165, height: 9, background: "var(--line)", borderRadius: 5, overflow: "hidden", border: "1px solid #000000" }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
+                    <div style={{ width: 190, height: 9, background: "var(--line)", borderRadius: 5, overflow: "hidden", border: "1px solid #000000" }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
                       <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)" }} />
                     </div>
                     <span style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>{pct}%</span>
                   </div>
-                  <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{byAgent[agent].length} calls</span>
+                  <span style={{ fontWeight: 700, whiteSpace: "nowrap", textAlign: "right" }}>{byAgent[agent].length} calls</span>
                 </button>
                 {isOpen && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 16px 14px", borderTop: "1px solid var(--line)" }}>
