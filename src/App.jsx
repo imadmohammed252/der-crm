@@ -696,38 +696,55 @@ function TrackingPanel({ state }) {
     <div style={{ display: "flex", gap: 40, alignItems: "flex-start" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>{activeLabel}</div>
-        <StatsBlock calls={activeCalls} users={state.users} state={state} />
+        function StatsBlock({ calls, users, state }) {
+  const [expandedAgent, setExpandedAgent] = useState(null);
+  const byAgent = {};
+  calls.forEach(c => { byAgent[c.agent] = byAgent[c.agent] || []; byAgent[c.agent].push(c); });
+  const agentNames = Object.keys(byAgent).sort();
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <div style={{ fontSize: 12, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 6 }}>Total calls</div>
+        <div style={{ fontSize: 64, fontWeight: 800, lineHeight: 1 }}>{calls.length}</div>
       </div>
-
-      <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
-        <div onClick={() => setMode("date")} style={{ padding: 14, borderRadius: 8, border: mode === "date" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Specific date</div>
-          <CustomDatePicker value={singleDate} onChange={(v) => { setSingleDate(v); setMode("date"); }} />
+      {agentNames.length === 0 ? (
+        <div style={{ color: "var(--text-dim)", fontSize: 13 }}>No calls logged in this range.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {agentNames.map(agent => {
+            const isOpen = expandedAgent === agent;
+            const assignedUnits = Object.values(state.units).filter(u => effectiveAssignedUsers(u, state.assignments).includes(agent));
+            const completedUnits = assignedUnits.filter(u => state.crm[u.key] && state.crm[u.key].lastOutcome);
+            const pct = assignedUnits.length ? Math.round((completedUnits.length / assignedUnits.length) * 100) : 0;
+            return (
+              <div key={agent} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, overflow: "hidden" }}>
+                <button onClick={() => setExpandedAgent(isOpen ? null : agent)} className="tap"
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left", cursor: "pointer", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                    <span style={{ whiteSpace: "nowrap" }}>{users[agent]?.displayName || agent}</span>
+                    <div style={{ flex: 1, maxWidth: 90, height: 4, background: "var(--line)", borderRadius: 2, overflow: "hidden" }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
+                      <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)" }} />
+                    </div>
+                    <span style={{ fontSize: 10.5, color: "var(--text-faint)", whiteSpace: "nowrap" }}>{completedUnits.length}/{assignedUnits.length}</span>
+                  </div>
+                  <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{byAgent[agent].length} calls</span>
+                </button>
+                {isOpen && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 16px 14px", borderTop: "1px solid var(--line)" }}>
+                    {["yes", "callMeBack", "no", "noAnswer"].map(outcome => (
+                      <div key={outcome} style={{ display: "flex", justifyContent: "space-between", padding: "8px 4px", fontSize: 13, borderBottom: "1px solid var(--line)" }}>
+                        <span style={{ color: "var(--text-dim)" }}>{OUTCOME_LABEL[outcome]}</span>
+                        <span>{byAgent[agent].filter(c => c.outcome === outcome).length}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-
-        <div onClick={() => setMode("period")} style={{ padding: 14, borderRadius: 8, border: mode === "period" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Period</div>
-          <select value={period} onChange={e => { setPeriod(e.target.value); setMode("period"); }} className="tap"
-            style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }}>
-            <option value="week">This week</option>
-            <option value="month">This month</option>
-            <option value="lastMonth">Last month</option>
-            <option value="allTime">Since the beginning</option>
-          </select>
-        </div>
-
-        <div style={{ padding: 14, borderRadius: 8, border: mode === "range" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)" }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Custom range</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-           <CustomDatePicker value={rangeStart} onChange={setRangeStart} />
-            <CustomDatePicker value={rangeEnd} onChange={setRangeEnd} />
-            <button onClick={() => { if (rangeStart && rangeEnd) { setRangeApplied({ start: rangeStart, end: rangeEnd }); setMode("range"); } }} className="tap"
-              style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "8px 10px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
-              View
-            </button>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
