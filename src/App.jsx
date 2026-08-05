@@ -717,10 +717,10 @@ function StatsBlock({ calls, users, state }) {
             return (
               <div key={agent} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, overflow: "hidden" }}>
                 <button onClick={() => setExpandedAgent(isOpen ? null : agent)} className="tap"
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left", cursor: "pointer", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                    <span style={{ whiteSpace: "nowrap", minWidth: 70 }}>{users[agent]?.displayName || agent}</span>
-                    <div style={{ width: 110, height: 14, background: "var(--line)", borderRadius: 7, overflow: "hidden", border: "1px solid #000000", flexShrink: 0 }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
+                  style={{ display: "grid", gridTemplateColumns: "auto 1fr auto", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left", cursor: "pointer", gap: 12 }}>
+                  <span style={{ whiteSpace: "nowrap" }}>{users[agent]?.displayName || agent}</span>
+                  <div style={{ justifySelf: "center", display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 165, height: 9, background: "var(--line)", borderRadius: 5, overflow: "hidden", border: "1px solid #000000" }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
                       <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)" }} />
                     </div>
                     <span style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>{pct}%</span>
