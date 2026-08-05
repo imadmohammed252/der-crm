@@ -616,8 +616,9 @@ function AdminApp({ state, setState, onLogout, saving }) {
   );
 }
 
-function TrackingPanel
+function TrackingPanel({ state }) {
   const [mode, setMode] = useState("date");
+
   const [singleDate, setSingleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [period, setPeriod] = useState("week");
   const [rangeStart, setRangeStart] = useState("");
@@ -2100,3 +2101,285 @@ function LookupTool({ myUnits }) {
     </div>
   );
 }
+
+/* ---------------------------------------------------------
+   BUILDING EXPLORER — visual floor-by-floor browser.
+   Admin sees every building. Agents see only buildings they're
+   assigned to at the building level (full access), plus any
+   individual units assigned to them via override in buildings
+   they otherwise have no access to (restricted to just those units).
+--------------------------------------------------------- */
+function buildingExplorerAccess(state, user, role) {
+  const buildings = Object.values(state.buildings);
+  if (role === "admin") {
+    return buildings.map(b => ({ id: b.id, name: b.name, restricted: false, allowedKeys: null }));
+  }
+  const out = [];
+  buildings.forEach(b => {
+    const buildingLevel = (state.assignments[b.id] || []).includes(user);
+    if (buildingLevel) { out.push({ id: b.id, name: b.name, restricted: false, allowedKeys: null }); return; }
+    const overrideUnits = Object.values(state.units).filter(u => u.buildingId === b.id && u.assignedTo && u.assignedTo.includes(user));
+    if (overrideUnits.length) {
+      out.push({ id: b.id, name: b.name, restricted: true, allowedKeys: new Set(overrideUnits.map(u => u.key)) });
+    }
+  });
+  return out;
+}
+
+function sortFloors(floors) {
+  return floors.slice().sort((a, b) => {
+    const na = parseFloat(a), nb = parseFloat(b);
+    const aNum = !isNaN(na), bNum = !isNaN(nb);
+    if (aNum && bNum) return nb - na;
+    if (aNum) return -1;
+    if (bNum) return 1;
+    return a.localeCompare(b);
+  });
+}
+function explorerDataLevel(u) {
+  if (u.ownerName && u.ownerContact) return "full";
+  if (u.ownerName || u.ownerContact) return "partial";
+  return "none";
+}
+function explorerBedMatch(u, filter) {
+  if (filter === "all") return true;
+  const beds = Number(u.bedrooms);
+  if (filter === "4plus") return beds >= 4;
+  return beds === Number(filter);
+}
+
+function BuildingExplorer({ state, user, role }) {
+  const access = useMemo(() => buildingExplorerAccess(state, user, role), [state.buildings, state.units, state.assignments, user, role]);
+  const [buildingId, setBuildingId] = useState(access[0]?.id || null);
+  const [floor, setFloor] = useState(null);
+  const [buildingFilter, setBuildingFilter] = useState("all");
+  const [floorFilter, setFloorFilter] = useState("all");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [jumpedKey, setJumpedKey] = useState(null);
+  const [modalUnit, setModalUnit] = useState(null);
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    if (!access.length) return;
+    if (!access.find(a => a.id === buildingId)) setBuildingId(access[0].id);
+  }, [access]);
+
+  useEffect(() => {
+    const onDoc = (e) => { if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const currentAccess = access.find(a => a.id === buildingId) || access[0];
+
+  const unitsInBuilding = useMemo(() => {
+    if (!currentAccess) return [];
+    return Object.values(state.units).filter(u => u.buildingId === currentAccess.id && (!currentAccess.restricted || currentAccess.allowedKeys.has(u.key)));
+  }, [state.units, currentAccess]);
+
+  const byFloor = {};
+  unitsInBuilding.forEach(u => {
+    const f = u.floor && String(u.floor).trim() ? String(u.floor).trim() : "—";
+    (byFloor[f] = byFloor[f] || []).push(u);
+  });
+  const numericFloors = sortFloors(Object.keys(byFloor).filter(f => f !== "—"));
+  const floorOrder = byFloor["—"] ? [...numericFloors, "—"] : numericFloors;
+
+  useEffect(() => {
+    if (!floorOrder.length) { setFloor(null); return; }
+    if (!floorOrder.includes(floor)) setFloor(floorOrder[0]);
+  }, [buildingId, floorOrder.join(",")]);
+
+  if (!access.length) {
+    return (
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontSize: 13.5, textAlign: "center", padding: 24 }}>
+        No buildings assigned to you yet — you'll see this once the admin assigns you a building or specific units.
+      </div>
+    );
+  }
+
+  const runSearch = (q) => {
+    const query = q.trim().toLowerCase();
+    if (!query) return [];
+    const out = [];
+    access.forEach(a => {
+      Object.values(state.units)
+        .filter(u => u.buildingId === a.id && (!a.restricted || a.allowedKeys.has(u.key)))
+        .forEach(u => {
+          const hit = (u.ownerName || "").toLowerCase().includes(query) ||
+            (u.ownerContact || "").toLowerCase().includes(query) ||
+            (u.unitId || "").toLowerCase().includes(query);
+          if (hit) out.push({ ...u, _buildingId: a.id, _buildingName: a.name });
+        });
+    });
+    return out.slice(0, 8);
+  };
+  const searchResults = runSearch(searchQ);
+
+  const goToUnit = (u, highlight) => {
+    if (u.buildingId !== buildingId) setBuildingId(u.buildingId);
+    const f = u.floor && String(u.floor).trim() ? String(u.floor).trim() : "—";
+    setFloor(f);
+    setFloorFilter("all");
+    setSearchOpen(false);
+    setSearchQ("");
+    if (highlight) {
+      setJumpedKey(u.key);
+      setTimeout(() => setJumpedKey(null), 2200);
+    }
+  };
+
+  const floorUnits = byFloor[floor] || [];
+  const floorMatchCount = floorFilter !== "all" ? floorUnits.filter(u => explorerBedMatch(u, floorFilter)).length : null;
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {access.map(a => (
+              <button key={a.id} onClick={() => { setBuildingId(a.id); setBuildingFilter("all"); setFloorFilter("all"); }} className="tap"
+                style={{ padding: "8px 14px", borderRadius: 6, fontSize: 12.5, background: buildingId === a.id ? "var(--accent-dim)" : "var(--panel-2)", border: buildingId === a.id ? "1px solid var(--accent)" : "1px solid var(--line)", color: "var(--text)", display: "flex", alignItems: "center", gap: 6 }}>
+                {a.name}{a.restricted && <span style={{ fontSize: 9.5, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>· partial</span>}
+              </button>
+            ))}
+          </div>
+          <div style={{ position: "relative" }} ref={searchRef}>
+            <button onClick={() => setSearchOpen(o => !o)} className="tap" title="Search owner / contact / unit"
+              style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--panel)", border: searchOpen ? "1px solid var(--accent)" : "1px solid var(--line)", borderRadius: 8, color: searchOpen ? "var(--accent)" : "var(--text-dim)", cursor: "pointer" }}>
+              <Search size={16} />
+            </button>
+            {searchOpen && (
+              <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, width: 300, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.45)", zIndex: 40, padding: 10 }}>
+                <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Owner, contact, or unit…" autoFocus
+                  className="tap" style={{ width: "100%", background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 6, padding: "9px 11px", color: "var(--text)", fontSize: 13 }} />
+                <div style={{ marginTop: 8, maxHeight: 260, overflowY: "auto" }}>
+                  {searchQ.trim() && searchResults.length === 0 && (
+                    <div style={{ padding: "14px 8px", fontSize: 12, color: "var(--text-faint)", textAlign: "center" }}>No match in your accessible units.</div>
+                  )}
+                  {searchResults.map(u => (
+                    <div key={u.key} style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div style={{ minWidth: 0, cursor: "pointer" }} onClick={() => goToUnit(u, false)}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{u.ownerName || "Owner not on file"}</div>
+                        <div style={{ fontSize: 10.5, color: "var(--text-dim)", marginTop: 2 }}>{u._buildingName} · Unit {u.unitId} · Floor {u.floor || "—"}</div>
+                      </div>
+                      <button onClick={() => goToUnit(u, true)} className="tap" style={{ fontFamily: "monospace", fontSize: 10, background: "transparent", border: "1px solid var(--line)", color: "var(--accent)", padding: "6px 9px", borderRadius: 5, cursor: "pointer", flexShrink: 0 }}>
+                        Jump →
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {currentAccess?.restricted && (
+          <div style={{ background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 6, padding: "9px 12px", fontSize: 12, color: "var(--text-dim)", marginBottom: 16 }}>
+            You're only assigned specific units in {currentAccess.name}, not the whole building — showing {unitsInBuilding.length} unit(s) assigned to you here.
+          </div>
+        )}
+
+        <div className="eyebrow" style={{ marginBottom: 8 }}>Highlight by size — across the whole building</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          {[["all", "All Units"], ["1", "1 Bed"], ["2", "2 Bed"], ["3", "3 Bed"], ["4plus", "4+ Bed"]].map(([id, label]) => (
+            <button key={id} onClick={() => setBuildingFilter(id)} className="tap"
+              style={{ fontFamily: "monospace", fontSize: 11, padding: "7px 14px", borderRadius: 20, border: buildingFilter === id ? "1px solid var(--accent)" : "1px solid var(--line)", background: buildingFilter === id ? "var(--accent)" : "var(--panel)", color: buildingFilter === id ? "#fff" : "var(--text-dim)", fontWeight: buildingFilter === id ? 600 : 400 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 20, alignItems: "start" }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 10px" }}>
+            <div className="eyebrow" style={{ marginBottom: 10, paddingLeft: 2 }}>Floors</div>
+            <div style={{ maxHeight: 560, overflowY: "auto" }}>
+              {floorOrder.map(f => (
+                <div key={f} onClick={() => { setFloor(f); setFloorFilter("all"); }}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 6px", borderRadius: 6, cursor: "pointer", background: f === floor ? "var(--panel-2)" : "transparent", border: f === floor ? "1px solid var(--accent)" : "1px solid transparent" }}>
+                  <div style={{ width: 26, fontFamily: "monospace", fontSize: 10.5, color: f === floor ? "var(--accent)" : "var(--text-dim)", fontWeight: f === floor ? 600 : 400, textAlign: "right", flexShrink: 0 }}>{f}</div>
+                  <div style={{ display: "flex", gap: 2, flex: 1 }}>
+                    {byFloor[f].map(u => {
+                      let cls = "";
+                      if (explorerDataLevel(u) !== "none") cls = "has-data";
+                      if (buildingFilter !== "all" && explorerBedMatch(u, buildingFilter)) cls = "match";
+                      return <div key={u.key} className={`explorer-window ${cls}`} />;
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: "20px 22px 24px", minHeight: 420 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+              <div className="disp" style={{ fontSize: 20, fontWeight: 800 }}>Floor {floor}</div>
+              <span className="mono" style={{ color: "var(--text-dim)", fontSize: 11.5 }}>{floorUnits.length} unit(s)</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 16 }}>Tap a unit to view owner, contact, and rental status on file.</div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 16, marginBottom: 16, borderBottom: "1px solid var(--line)" }}>
+              <span className="eyebrow" style={{ marginRight: 2 }}>Highlight on this floor</span>
+              {[["all", "All"], ["1", "1 Bed"], ["2", "2 Bed"], ["3", "3 Bed"], ["4plus", "4+ Bed"]].map(([id, label]) => (
+                <button key={id} onClick={() => setFloorFilter(id)} className="tap"
+                  style={{ fontFamily: "monospace", fontSize: 11, padding: "7px 14px", borderRadius: 20, border: floorFilter === id ? "1px solid var(--accent)" : "1px solid var(--line)", background: floorFilter === id ? "var(--accent)" : "var(--panel)", color: floorFilter === id ? "#fff" : "var(--text-dim)", fontWeight: floorFilter === id ? 600 : 400 }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {floorMatchCount === 0 && (
+              <div style={{ fontSize: 12.5, color: "var(--text-faint)", fontStyle: "italic", marginBottom: 12 }}>No units on Floor {floor} match that size.</div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 12 }}>
+              {floorUnits.map(u => {
+                const buildingActive = buildingFilter !== "all";
+                const floorActive = floorFilter !== "all";
+                const matchesBuilding = explorerBedMatch(u, buildingFilter);
+                const matchesFloor = explorerBedMatch(u, floorFilter);
+                let cls = "explorer-unit-card";
+                if ((buildingActive && matchesBuilding) || (floorActive && matchesFloor)) cls += " match";
+                else if ((buildingActive && !matchesBuilding) || (floorActive && !matchesFloor)) cls += " dim";
+                if (jumpedKey === u.key) cls += " jumped";
+                const level = explorerDataLevel(u);
+                return (
+                  <div key={u.key} className={cls} onClick={() => setModalUnit(u)}>
+                    {u.status === "occupied" && <div className="explorer-rented-x" title="Currently rented">&times;</div>}
+                    <div className={`explorer-dot ${level}`} />
+                    <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)" }}>{u.unitId}</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, margin: "6px 0 2px" }}>{u.bedrooms ? `${u.bedrooms} Bed` : "—"}</div>
+                    <div className="mono" style={{ fontSize: 10.5, color: "var(--text-dim)" }}>{u.carpetArea ? `${u.carpetArea} sqft` : "no data"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {modalUnit && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setModalUnit(null)}>
+            <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, maxWidth: 420, width: "100%", padding: "26px 26px 22px", position: "relative" }} onClick={e => e.stopPropagation()}>
+              <button onClick={() => setModalUnit(null)} className="tap" style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", color: "var(--text-dim)", fontSize: 20, cursor: "pointer" }}>&times;</button>
+              <div className="mono" style={{ color: "var(--accent)", fontSize: 11.5, letterSpacing: "0.05em" }}>UNIT {modalUnit.unitId} · FLOOR {modalUnit.floor || "—"}</div>
+              <div className="disp" style={{ fontSize: 22, fontWeight: 800, margin: "6px 0 8px" }}>
+                {modalUnit.bedrooms ? `${modalUnit.bedrooms} Bedroom` : "Unit"}{modalUnit.carpetArea ? ` · ${Number(modalUnit.carpetArea).toLocaleString()} sqft` : ""}
+              </div>
+              {modalUnit.status === "occupied" && (
+                <div style={{ display: "inline-block", fontSize: 10.5, color: "var(--text-faint)", border: "1px solid var(--line)", borderRadius: 12, padding: "3px 10px", marginBottom: 14 }}>&times; Currently rented</div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                <Field label="Owner" value={modalUnit.ownerName} />
+                <Field label="Contact" value={modalUnit.ownerContact} />
+                <Field label="Current Rent" value={modalUnit.currentRent ? `AED ${Number(modalUnit.currentRent).toLocaleString()}` : ""} />
+                <Field label="Current Market Price" value={modalUnit.marketPrice ? `AED ${Number(modalUnit.marketPrice).toLocaleString()}` : ""} />
+              </div>
+              <TransactionsList transactions={modalUnit.transactions} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
