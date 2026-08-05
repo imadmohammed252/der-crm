@@ -718,12 +718,12 @@ function StatsBlock({ calls, users, state }) {
               <div key={agent} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, overflow: "hidden" }}>
                 <button onClick={() => setExpandedAgent(isOpen ? null : agent)} className="tap"
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left", cursor: "pointer", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
                     <span style={{ whiteSpace: "nowrap" }}>{users[agent]?.displayName || agent}</span>
-                    <div style={{ flex: 1, maxWidth: 90, height: 4, background: "var(--line)", borderRadius: 2, overflow: "hidden" }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
+                    <div style={{ flex: 1, height: 14, background: "var(--line)", borderRadius: 7, overflow: "hidden" }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
                       <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)" }} />
                     </div>
-                    <span style={{ fontSize: 10.5, color: "var(--text-faint)", whiteSpace: "nowrap" }}>{completedUnits.length}/{assignedUnits.length}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>{pct}%</span>
                   </div>
                   <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>{byAgent[agent].length} calls</span>
                 </button>
