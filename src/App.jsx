@@ -696,7 +696,7 @@ function TrackingPanel({ state }) {
     <div style={{ display: "flex", gap: 40, alignItems: "flex-start" }}>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16 }}>{activeLabel}</div>
-        <StatsBlock calls={activeCalls} users={state.users} />
+        <StatsBlock calls={activeCalls} users={state.users} state={state} />
       </div>
 
       <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -1173,28 +1173,13 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Existing buildings</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {buildings.map(b => (
-                <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <button onClick={() => setTargetBuilding(b.id)} className="tap"
-                    style={{
-                      padding: "8px 14px", borderRadius: 5, fontSize: 13,
-                      background: targetBuilding === b.id ? "var(--accent-dim)" : "var(--panel-2)",
-                      border: targetBuilding === b.id ? "1px solid var(--accent)" : "1px solid var(--line)",
-                      color: "var(--text)"
-                    }}>{b.name}</button>
-                  {confirmWipeBuilding === b.id ? (
-                    <>
-                      <button onClick={() => { wipeBuilding(b.id); setConfirmWipeBuilding(null); }} className="tap"
-                        style={{ background: "var(--red)", border: "none", color: "#fff", padding: "8px 10px", borderRadius: 5, fontSize: 11, fontWeight: 600 }}>Confirm</button>
-                      <button onClick={() => setConfirmWipeBuilding(null)} className="tap"
-                        style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "8px 10px", borderRadius: 5, fontSize: 11 }}>Cancel</button>
-                    </>
-                  ) : (
-                    <button onClick={() => setConfirmWipeBuilding(b.id)} className="tap" title={`Wipe data for ${b.name}`}
-                      style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "8px 9px", borderRadius: 5 }}>
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
+                <button key={b.id} onClick={() => setTargetBuilding(b.id)} className="tap"
+                  style={{
+                    padding: "8px 14px", borderRadius: 5, fontSize: 13,
+                    background: targetBuilding === b.id ? "var(--accent-dim)" : "var(--panel-2)",
+                    border: targetBuilding === b.id ? "1px solid var(--accent)" : "1px solid var(--line)",
+                    color: "var(--text)"
+                  }}>{b.name}</button>
               ))}
             </div>
           </div>
@@ -1217,9 +1202,24 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
           fieldList={["unitId", "ownerName", "ownerContact", "ownershipStart", "purchasePrice"]}
           map={ownerMap} setMap={setOwnerMap} />
 
-        <button onClick={runImport} disabled={!targetBuilding} className="tap" style={{ marginTop: 6, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 5, padding: "10px 18px", fontSize: 13.5, fontWeight: 600 }}>
-          Import into this building
-        </button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, flexWrap: "wrap", gap: 10 }}>
+          <button onClick={runImport} disabled={!targetBuilding} className="tap" style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 5, padding: "10px 18px", fontSize: 13.5, fontWeight: 600 }}>
+            Import into this building
+          </button>
+          {confirmWipeBuilding === targetBuilding ? (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => { wipeBuilding(targetBuilding); setConfirmWipeBuilding(null); }} className="tap"
+                style={{ background: "var(--red)", border: "none", color: "#fff", padding: "10px 14px", borderRadius: 5, fontSize: 12, fontWeight: 600 }}>Confirm wipe</button>
+              <button onClick={() => setConfirmWipeBuilding(null)} className="tap"
+                style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "10px 14px", borderRadius: 5, fontSize: 12 }}>Cancel</button>
+            </div>
+          ) : (
+            <button onClick={() => targetBuilding && setConfirmWipeBuilding(targetBuilding)} disabled={!targetBuilding} title="Wipe data for this building"
+              style={{ background: "transparent", border: "1px solid var(--line)", color: targetBuilding ? "var(--text-dim)" : "var(--text-faint)", padding: "10px 12px", borderRadius: 5, cursor: targetBuilding ? "pointer" : "not-allowed", opacity: targetBuilding ? 1 : 0.5 }}>
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
         {log && <div style={{ marginTop: 10, fontSize: 12.5, color: "var(--text-dim)", background: "var(--panel-2)", borderRadius: 5, padding: "10px 12px" }}>{log}</div>}
       </div>
 
@@ -1239,8 +1239,56 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
   );
 }
 
-function AssignmentPanel({ state, setState }) {
-  const buildings = Object.values(state.buildings);
+function UnitOverrides({ bUnits, agents, toggleUnitAgent }) {
+  const [expanded, setExpanded] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [q, setQ] = useState("");
+  const filtered = q.trim() ? bUnits.filter(u => u.unitId.toLowerCase().includes(q.trim().toLowerCase())) : bUnits;
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div onClick={() => setExpanded(e => !e)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11.5, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          <ChevronRight size={12} style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s ease" }} />
+          Unit overrides
+        </div>
+        {expanded && (
+          <button onClick={() => setSearching(s => !s)} className="tap"
+            style={{ background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 4, display: "flex" }}>
+            <Search size={13} />
+          </button>
+        )}
+      </div>
+      {expanded && searching && (
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search unit…" autoFocus
+          style={{ width: "100%", marginTop: 8, background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 5, padding: "6px 10px", color: "var(--text)", fontSize: 12 }} />
+      )}
+      {expanded && (
+        <div style={{ maxHeight: 190, overflow: "auto", border: "1px solid var(--line)", borderRadius: 6, marginTop: 8 }}>
+          {filtered.map(u => (
+            <div key={u.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--line)" }}>
+              <div style={{ fontSize: 12.5 }}>Unit {u.unitId}</div>
+              <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                {agents.map(a => {
+                  const isAssigned = (u.assignedTo || []).includes(a.username);
+                  return (
+                    <button key={a.username} onClick={() => toggleUnitAgent(u.key, a.username)} className="tap"
+                      style={{ padding: "4px 8px", borderRadius: 4, fontSize: 10.5, background: isAssigned ? "var(--accent-dim)" : "transparent", border: isAssigned ? "1px solid var(--accent)" : "1px solid var(--line)", color: "var(--text-dim)" }}>
+                      {a.displayName}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {filtered.length === 0 && <div style={{ padding: 10, fontSize: 12, color: "var(--text-faint)" }}>No matching units.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssignmentPanel({ state, setState }) {  const buildings = Object.values(state.buildings);
   const units = Object.values(state.units);
   const agents = Object.values(state.users || {}).filter(u => u.role === "agent");
 
@@ -1286,25 +1334,7 @@ function AssignmentPanel({ state, setState }) {
               </div>
             </div>
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
-              <div className="eyebrow" style={{ marginBottom: 8 }}>Unit overrides — give specific units to any agent, regardless of building assignment</div>
-              <div style={{ maxHeight: 190, overflow: "auto", border: "1px solid var(--line)", borderRadius: 6 }}>
-                {bUnits.map(u => (
-                  <div key={u.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--line)" }}>
-                    <div style={{ fontSize: 12.5 }}>Unit {u.unitId}</div>
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {agents.map(a => {
-                        const isAssigned = (u.assignedTo || []).includes(a.username);
-                        return (
-                          <button key={a.username} onClick={() => toggleUnitAgent(u.key, a.username)} className="tap"
-                            style={{ padding: "4px 8px", borderRadius: 4, fontSize: 10.5, background: isAssigned ? "var(--accent-dim)" : "transparent", border: isAssigned ? "1px solid var(--accent)" : "1px solid var(--line)", color: "var(--text-dim)" }}>
-                            {a.displayName}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <UnitOverrides bUnits={bUnits} agents={agents} toggleUnitAgent={toggleUnitAgent} />
             </div>
           </div>
         );
