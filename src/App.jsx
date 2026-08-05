@@ -618,7 +618,6 @@ function AdminApp({ state, setState, onLogout, saving }) {
 
 function TrackingPanel({ state }) {
   const [mode, setMode] = useState("date");
-
   const [singleDate, setSingleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [period, setPeriod] = useState("week");
   const [rangeStart, setRangeStart] = useState("");
