@@ -719,8 +719,8 @@ function StatsBlock({ calls, users, state }) {
                 <button onClick={() => setExpandedAgent(isOpen ? null : agent)} className="tap"
                   style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", background: "transparent", border: "none", padding: "12px 16px", color: "var(--text)", fontSize: 14, textAlign: "left", cursor: "pointer", gap: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                    <span style={{ whiteSpace: "nowrap" }}>{users[agent]?.displayName || agent}</span>
-                    <div style={{ flex: 1, height: 14, background: "var(--line)", borderRadius: 7, overflow: "hidden" }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
+                    <span style={{ whiteSpace: "nowrap", minWidth: 70 }}>{users[agent]?.displayName || agent}</span>
+                    <div style={{ width: 110, height: 14, background: "var(--line)", borderRadius: 7, overflow: "hidden", border: "1px solid #000000", flexShrink: 0 }} title={`${completedUnits.length} of ${assignedUnits.length} assigned units completed overall`}>
                       <div style={{ width: `${pct}%`, height: "100%", background: "var(--accent)" }} />
                     </div>
                     <span style={{ fontSize: 11, color: "var(--text-faint)", whiteSpace: "nowrap" }}>{pct}%</span>
