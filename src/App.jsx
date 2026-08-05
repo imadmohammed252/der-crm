@@ -4,7 +4,7 @@ import * as XLSX from "xlsx";
 import {
   Building2, Search, Upload, LogOut, ArrowRightLeft, Phone,
   PhoneMissed, PhoneOff, Check, X, Clock, ChevronRight, RefreshCcw,
-  Users, LayoutGrid, ClipboardList, AlertTriangle, Trash2, Settings, Eye, EyeOff
+  Users, LayoutGrid, ClipboardList, AlertTriangle, Trash2, Settings, Eye, EyeOff, Skull, Calendar
 } from "lucide-react";
 
 /* ---------------------------------------------------------
@@ -44,7 +44,7 @@ const THEME = `
 .pulse-btn:hover{ transform: scale(1.15); font-weight: 1000; }
 .login-pulse:hover{ background: var(--bg) !important; color: var(--accent) !important; border-color: var(--text-dim) !important; }
 .logout-pulse:hover{ background: var(--accent) !important; color: #000000 !important; }
-`;
+.wipe-pulse:hover{ background: var(--red) !important; color: #000000 !important; }`;
 
 /* ---------------------------------------------------------
    HELPERS: dates, stats, storage keys
@@ -565,13 +565,20 @@ function AdminApp({ state, setState, onLogout, saving }) {
       <TopBar title="Admin Portal" subtitle="Upload data, assign buildings and units to agents" onLogout={onLogout} saving={saving}
         extraMenuItems={[{ label: "Wipe data", icon: Trash2, onClick: () => setConfirmingWipe(true) }]} />
       {confirmingWipe && (
-        <div style={{ background: "var(--accent-dim)", borderBottom: "1px solid var(--accent)", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12.5, color: "var(--text)" }}>Wipe every building, unit, and CRM record? User logins will stay.</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => { wipeAll(); setConfirmingWipe(false); }} className="tap"
-              style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "7px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>Yes, wipe</button>
-            <button onClick={() => setConfirmingWipe(false)} className="tap"
-              style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "7px 12px", borderRadius: 6, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.1em" }}>Cancel</button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 10, padding: 32, maxWidth: 360, textAlign: "center" }}>
+            <Skull size={40} style={{ color: "var(--red)", marginBottom: 14 }} />
+            <div className="disp" style={{ fontSize: 18, fontWeight: 800, marginBottom: 22 }}>SURE YOU WANT TO WIPE ALL DATA?</div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button onClick={() => setConfirmingWipe(false)} className="tap pulse-btn logout-pulse"
+                style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "11px 22px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                No
+              </button>
+              <button onClick={() => { wipeAll(); setConfirmingWipe(false); }} className="tap pulse-btn wipe-pulse"
+                style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "11px 22px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                Wipe
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -695,8 +702,7 @@ function TrackingPanel({ state }) {
       <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
         <div onClick={() => setMode("date")} style={{ padding: 14, borderRadius: 8, border: mode === "date" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Specific date</div>
-          <input type="date" value={singleDate} onChange={e => { setSingleDate(e.target.value); setMode("date"); }} className="tap"
-            style={{ width: "100%", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }} />
+          <CustomDatePicker value={singleDate} onChange={(v) => { setSingleDate(v); setMode("date"); }} />
         </div>
 
         <div onClick={() => setMode("period")} style={{ padding: 14, borderRadius: 8, border: mode === "period" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}>
@@ -713,10 +719,8 @@ function TrackingPanel({ state }) {
         <div style={{ padding: 14, borderRadius: 8, border: mode === "range" ? "1px solid var(--accent)" : "1px solid var(--line)", background: "var(--panel)" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Custom range</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <input type="date" value={rangeStart} onChange={e => setRangeStart(e.target.value)} className="tap"
-              style={{ background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }} />
-            <input type="date" value={rangeEnd} onChange={e => setRangeEnd(e.target.value)} className="tap"
-              style={{ background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: "var(--text)", fontSize: 13 }} />
+           <CustomDatePicker value={rangeStart} onChange={setRangeStart} />
+            <CustomDatePicker value={rangeEnd} onChange={setRangeEnd} />
             <button onClick={() => { if (rangeStart && rangeEnd) { setRangeApplied({ start: rangeStart, end: rangeEnd }); setMode("range"); } }} className="tap"
               style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "8px 10px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
               View
@@ -728,9 +732,124 @@ function TrackingPanel({ state }) {
   );
 }
 
-function BuildingsUpload({ state, setState }) {
-  const [newBuildingName, setNewBuildingName] = useState("");
+const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const WHEEL_YEARS = [2026, 2027, 2028, 2029, 2030];
+
+function CustomDatePicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [pickerMode, setPickerMode] = useState("calendar");
+  const initial = value ? new Date(value + "T00:00:00") : new Date();
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [wheelMonth, setWheelMonth] = useState(initial.getMonth());
+  const [wheelYear, setWheelYear] = useState(Math.min(Math.max(initial.getFullYear(), 2026), 2030));
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const onDocClick = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setPickerMode("calendar"); } };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  const daysInMonth = (m, y) => new Date(y, m + 1, 0).getDate();
+  const firstWeekday = (m, y) => new Date(y, m, 1).getDay();
+
+  const selectDay = (day) => {
+    const d = new Date(viewYear, viewMonth, day);
+    onChange(d.toISOString().slice(0, 10));
+    setOpen(false);
+  };
+
+  const applyWheel = () => { setViewMonth(wheelMonth); setViewYear(wheelYear); setPickerMode("calendar"); };
+
+  const cells = [];
+  const totalDays = daysInMonth(viewMonth, viewYear);
+  const startOffset = firstWeekday(viewMonth, viewYear);
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= totalDays; d++) cells.push(d);
+
+  const displayValue = value ? new Date(value + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Select date";
+
+  return (
+    <div style={{ position: "relative" }} ref={ref}>
+      <button type="button" onClick={() => setOpen(o => !o)} className="tap"
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 6, padding: "8px 10px", color: value ? "var(--text)" : "var(--text-dim)", fontSize: 13 }}>
+        {displayValue}
+        <Calendar size={14} style={{ color: "var(--text-dim)" }} />
+      </button>
+
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50, width: 240, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: 12, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+          {pickerMode === "calendar" ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <button type="button" onClick={() => { const d = new Date(viewYear, viewMonth - 1, 1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()); }}
+                  style={{ background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 4, display: "flex" }}>
+                  <ChevronRight size={14} style={{ transform: "rotate(180deg)" }} />
+                </button>
+                <button type="button" onClick={() => { setWheelMonth(viewMonth); setWheelYear(Math.min(Math.max(viewYear, 2026), 2030)); setPickerMode("wheel"); }}
+                  style={{ background: "transparent", border: "none", color: "var(--text)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+                  {MONTH_NAMES[viewMonth]} {viewYear}
+                </button>
+                <button type="button" onClick={() => { const d = new Date(viewYear, viewMonth + 1, 1); setViewMonth(d.getMonth()); setViewYear(d.getFullYear()); }}
+                  style={{ background: "transparent", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: 4, display: "flex" }}>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
+                {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                  <div key={i} style={{ fontSize: 9.5, color: "var(--text-faint)", textAlign: "center" }}>{d}</div>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+                {cells.map((day, i) => {
+                  const isSelected = value && day && new Date(value + "T00:00:00").toDateString() === new Date(viewYear, viewMonth, day).toDateString();
+                  return (
+                    <button key={i} type="button" disabled={!day} onClick={() => day && selectDay(day)}
+                      style={{ aspectRatio: "1", background: isSelected ? "var(--accent)" : "transparent", border: "none", borderRadius: 4, color: !day ? "transparent" : isSelected ? "#000" : "var(--text)", fontSize: 11.5, cursor: day ? "pointer" : "default" }}>
+                      {day || ""}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                <div style={{ flex: 1, maxHeight: 140, overflow: "auto", border: "1px solid var(--line)", borderRadius: 6 }}>
+                  {MONTH_NAMES.map((m, i) => (
+                    <div key={m} onClick={() => setWheelMonth(i)}
+                      style={{ padding: "7px 6px", textAlign: "center", fontSize: 11.5, cursor: "pointer", background: wheelMonth === i ? "var(--panel-2)" : "transparent", color: wheelMonth === i ? "var(--text)" : "var(--text-dim)", fontWeight: wheelMonth === i ? 700 : 400 }}>
+                      {m}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ flex: 1, maxHeight: 140, overflow: "auto", border: "1px solid var(--line)", borderRadius: 6 }}>
+                  {WHEEL_YEARS.map(y => (
+                    <div key={y} onClick={() => setWheelYear(y)}
+                      style={{ padding: "7px 6px", textAlign: "center", fontSize: 11.5, cursor: "pointer", background: wheelYear === y ? "var(--panel-2)" : "transparent", color: wheelYear === y ? "var(--text)" : "var(--text-dim)", fontWeight: wheelYear === y ? 700 : 400 }}>
+                      {y}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button type="button" onClick={applyWheel} className="tap pulse-btn login-pulse"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, background: "transparent", border: "1px solid var(--line)", borderRadius: 6, color: "var(--text-dim)", cursor: "pointer" }}>
+                  <Check size={15} />
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewBuildingName] = useState("");
   const [targetBuilding, setTargetBuilding] = useState("");
+  const [confirmWipeBuilding, setConfirmWipeBuilding] = useState(null);
   const [unitFile, setUnitFile] = useState(null);
   const [ownerFile, setOwnerFile] = useState(null);
   const [unitHeaders, setUnitHeaders] = useState([]);
@@ -740,6 +859,17 @@ function BuildingsUpload({ state, setState }) {
   const [log, setLog] = useState("");
 
   const buildings = Object.values(state.buildings);
+
+  const wipeBuilding = (buildingId) => {
+    const newUnits = {};
+    Object.entries(state.units).forEach(([k, u]) => { if (u.buildingId !== buildingId) newUnits[k] = u; });
+    const newCrm = {};
+    Object.entries(state.crm).forEach(([k, c]) => { if (!k.startsWith(`${buildingId}::`)) newCrm[k] = c; });
+    const newAssignments = { ...state.assignments };
+    delete newAssignments[buildingId];
+    setState({ ...state, units: newUnits, crm: newCrm, assignments: newAssignments });
+    if (targetBuilding === buildingId) setTargetBuilding("");
+  };
 
   const createBuilding = () => {
     if (!newBuildingName.trim()) return;
@@ -988,7 +1118,7 @@ function BuildingsUpload({ state, setState }) {
           {file && (
             <button onClick={() => { setter(null); setHeaders([]); setMap({}); setShowOverride(false); setInputKey(k => k + 1); }} className="tap"
               style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "8px 12px", borderRadius: 5, fontSize: 12.5 }}>
-              <X size={13} /> Clear
+              <Trash2 size={13} /> Clear
             </button>
           )}
         </div>
@@ -1040,16 +1170,31 @@ function BuildingsUpload({ state, setState }) {
         </div>
         {buildings.length > 0 && (
           <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Existing buildings</div>
+           <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Existing buildings</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {buildings.map(b => (
-                <button key={b.id} onClick={() => setTargetBuilding(b.id)} className="tap"
-                  style={{
-                    padding: "8px 14px", borderRadius: 5, fontSize: 13,
-                    background: targetBuilding === b.id ? "var(--accent-dim)" : "var(--panel-2)",
-                    border: targetBuilding === b.id ? "1px solid var(--accent)" : "1px solid var(--line)",
-                    color: "var(--text)"
-                  }}>{b.name}</button>
+                <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <button onClick={() => setTargetBuilding(b.id)} className="tap"
+                    style={{
+                      padding: "8px 14px", borderRadius: 5, fontSize: 13,
+                      background: targetBuilding === b.id ? "var(--accent-dim)" : "var(--panel-2)",
+                      border: targetBuilding === b.id ? "1px solid var(--accent)" : "1px solid var(--line)",
+                      color: "var(--text)"
+                    }}>{b.name}</button>
+                  {confirmWipeBuilding === b.id ? (
+                    <>
+                      <button onClick={() => { wipeBuilding(b.id); setConfirmWipeBuilding(null); }} className="tap"
+                        style={{ background: "var(--red)", border: "none", color: "#fff", padding: "8px 10px", borderRadius: 5, fontSize: 11, fontWeight: 600 }}>Confirm</button>
+                      <button onClick={() => setConfirmWipeBuilding(null)} className="tap"
+                        style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "8px 10px", borderRadius: 5, fontSize: 11 }}>Cancel</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirmWipeBuilding(b.id)} className="tap" title={`Wipe data for ${b.name}`}
+                      style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "8px 9px", borderRadius: 5 }}>
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -1105,6 +1250,13 @@ function AssignmentPanel({ state, setState }) {
     setState({ ...state, assignments: { ...state.assignments, [buildingId]: next } });
   };
 
+  const toggleUnitAgent = (unitKey, username) => {
+    const unit = state.units[unitKey];
+    const current = unit.assignedTo || [];
+    const next = current.includes(username) ? current.filter(u => u !== username) : [...current, username];
+    setState({ ...state, units: { ...state.units, [unitKey]: { ...unit, assignedTo: next } } });
+  };
+
   if (!buildings.length) return <div style={{ color: "var(--text-dim)", fontSize: 13.5 }}>Create a building and import data first.</div>;
   if (!agents.length) return <div style={{ color: "var(--text-dim)", fontSize: 13.5 }}>No agent logins yet. Create one in the Users tab first.</div>;
 
@@ -1130,7 +1282,28 @@ function AssignmentPanel({ state, setState }) {
                       color: "var(--text)"
                     }}>{a.displayName}</button>
                 ))}
-                {buildingAssigned.length === 0 && <span style={{ fontSize: 11.5, color: "var(--text-faint)", alignSelf: "center" }}>Unassigned</span>}
+              {buildingAssigned.length === 0 && <span style={{ fontSize: 11.5, color: "var(--text-faint)", alignSelf: "center" }}>Unassigned</span>}
+              </div>
+            </div>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+              <div className="eyebrow" style={{ marginBottom: 8 }}>Unit overrides — give specific units to any agent, regardless of building assignment</div>
+              <div style={{ maxHeight: 190, overflow: "auto", border: "1px solid var(--line)", borderRadius: 6 }}>
+                {bUnits.map(u => (
+                  <div key={u.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderBottom: "1px solid var(--line)" }}>
+                    <div style={{ fontSize: 12.5 }}>Unit {u.unitId}</div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {agents.map(a => {
+                        const isAssigned = (u.assignedTo || []).includes(a.username);
+                        return (
+                          <button key={a.username} onClick={() => toggleUnitAgent(u.key, a.username)} className="tap"
+                            style={{ padding: "4px 8px", borderRadius: 4, fontSize: 10.5, background: isAssigned ? "var(--accent-dim)" : "transparent", border: isAssigned ? "1px solid var(--accent)" : "1px solid var(--line)", color: "var(--text-dim)" }}>
+                            {a.displayName}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1633,6 +1806,27 @@ function UnitRow({ unit, crm, eff, volatility, demand, active, onToggle, onMoveT
 /* ---------------------------------------------------------
    DETAIL PANE (right) — the split-screen "everything at a touch" view
 --------------------------------------------------------- */
+function TransactionsList({ transactions }) {
+  const list = transactions || [];
+  return (
+    <div>
+      <div className="eyebrow" style={{ color: "var(--text-faint)", marginBottom: 6 }}>Recent Transactions</div>
+      {list.length === 0 ? (
+        <div style={{ fontSize: 14, color: "var(--text-faint)" }}><em>not available</em></div>
+      ) : (
+        <div style={{ maxHeight: 130, overflow: "auto", display: "flex", flexDirection: "column", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 8px" }}>
+          {list.slice(0, 4).map((t, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "8px 2px", borderBottom: i < Math.min(list.length, 4) - 1 ? "1px solid var(--line)" : "none" }}>
+              <span style={{ color: "var(--text-dim)" }}>{fmtDate(t.date)}</span>
+              <span>{t.amount ? `AED ${Number(t.amount).toLocaleString()}` : "—"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Field({ label, value }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -1701,7 +1895,10 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
         <Field label="Current Lease End" value={unit.currentLeaseEnd ? fmtDate(unit.currentLeaseEnd) : ""} />
         <Field label="Purchase Price" value={unit.purchasePrice ? `AED ${Number(unit.purchasePrice).toLocaleString()}` : ""} />
         <Field label="Ownership Since" value={unit.ownershipStart ? fmtDate(unit.ownershipStart) : ""} />
+        <Field label="Current Market Price" value={unit.marketPrice ? `AED ${Number(unit.marketPrice).toLocaleString()}` : ""} />
       </div>
+
+      <TransactionsList transactions={unit.transactions} />
 
       {/* Notes */}
       <div>
@@ -1831,7 +2028,11 @@ function LookupTool({ myUnits }) {
                   <Field label="Contact" value={u.ownerContact} />
                   <Field label="Bedrooms" value={u.bedrooms} />
                   <Field label="Built-up Area" value={u.carpetArea ? `${u.carpetArea} sqft` : ""} />
-                  <Field label="Current Rent" value={u.currentRent ? `AED ${Number(u.currentRent).toLocaleString()}` : ""} />
+                 <Field label="Current Rent" value={u.currentRent ? `AED ${Number(u.currentRent).toLocaleString()}` : ""} />
+                  <Field label="Current Market Price" value={u.marketPrice ? `AED ${Number(u.marketPrice).toLocaleString()}` : ""} />
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <TransactionsList transactions={u.transactions} />
                 </div>
                 <div style={{ fontSize: 10.5, color: "var(--text-faint)", marginTop: 10 }}>Reference only. Outcomes can't be logged from lookup. Open the CRM queue to call this unit.</div>
               </div>
