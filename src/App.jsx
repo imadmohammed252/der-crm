@@ -44,8 +44,21 @@ const THEME = `
 .pulse-btn:hover{ transform: scale(1.15); font-weight: 1000; }
 .login-pulse:hover{ background: var(--bg) !important; color: var(--accent) !important; border-color: var(--text-dim) !important; }
 .logout-pulse:hover{ background: var(--accent) !important; color: #000000 !important; }
-.wipe-pulse:hover{ background: var(--red) !important; color: #000000 !important; }`;
-
+.wipe-pulse:hover{ background: var(--red) !important; color: #000000 !important; }
+.explorer-window{ height:13px; flex:1; border-radius:1.5px; background:var(--panel-2); }
+.explorer-window.has-data{ background:var(--text-faint); }
+.explorer-window.match{ background:var(--accent); box-shadow:0 0 5px 0 var(--accent); }
+.explorer-unit-card{ border:1px solid var(--line); border-radius:8px; padding:14px 10px; background:var(--panel-2); cursor:pointer; text-align:center; transition:all .12s ease; position:relative; }
+.explorer-unit-card:hover{ transform:translateY(-2px); border-color:var(--accent); }
+.explorer-unit-card.match{ border-color:var(--accent); border-width:2px; box-shadow:0 0 0 2px var(--accent), 0 0 16px 1px var(--accent-dim); background:var(--accent-dim); }
+.explorer-unit-card.dim{ opacity:.32; }
+.explorer-dot{ width:7px; height:7px; border-radius:50%; position:absolute; top:10px; right:10px; }
+.explorer-dot.full{ background:var(--green); }
+.explorer-dot.partial{ background:var(--amber); }
+.explorer-dot.none{ background:var(--text-faint); }
+.explorer-rented-x{ position:absolute; top:8px; left:9px; font-size:12px; font-weight:700; color:var(--text-faint); line-height:1; }
+@keyframes explorerJumpPulse{ 0%{ box-shadow:0 0 0 0 var(--accent); } 70%{ box-shadow:0 0 0 14px transparent; } 100%{ box-shadow:0 0 0 0 transparent; } }
+.explorer-unit-card.jumped{ border-color:var(--accent); animation:explorerJumpPulse 1s ease-out 2; }
 /* ---------------------------------------------------------
    HELPERS: dates, stats, storage keys
 --------------------------------------------------------- */
@@ -583,8 +596,7 @@ function AdminApp({ state, setState, onLogout, saving }) {
         </div>
       )}
       <div style={{ display: "flex", borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
-        {[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"], ["tracking", "Tracking"]].map(([id, label]) => (
-          <button key={id} onClick={() => setTab(id)} className="tap"
+{[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"], ["tracking", "Tracking"], ["explorer", "Explorer"]].map(([id, label]) => (          <button key={id} onClick={() => setTab(id)} className="tap"
             style={{
               padding: "13px 18px", background: "transparent", border: "none",
               borderBottom: tab === id ? "1px solid var(--accent)" : "1px solid transparent",
@@ -598,12 +610,13 @@ function AdminApp({ state, setState, onLogout, saving }) {
         {tab === "assign" && <AssignmentPanel state={state} setState={setState} />}
         {tab === "users" && <UsersPanel state={state} setState={setState} />}
         {tab === "tracking" && <TrackingPanel state={state} />}
+        {tab === "explorer" && <BuildingExplorer state={state} role="admin" />}
       </div>
     </>
   );
 }
 
-function TrackingPanel({ state }) {
+function TrackingPanel
   const [mode, setMode] = useState("date");
   const [singleDate, setSingleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [period, setPeriod] = useState("week");
@@ -1593,8 +1606,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
           />
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ display: "flex", borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
-              {[["detail", "Call Detail"], ["lookup", "Lookup"]].map(([id, label]) => (
-                <button key={id} onClick={() => setRightPanel(id)} className="tap"
+{[["detail", "Call Detail"], ["lookup", "Lookup"], ["explorer", "Explorer"]].map(([id, label]) => (                <button key={id} onClick={() => setRightPanel(id)} className="tap"
                   style={{
                     padding: "11px 16px", background: "transparent", border: "none",
                     borderBottom: rightPanel === id ? "1px solid var(--accent)" : "1px solid transparent",
@@ -1602,8 +1614,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
                     textTransform: "uppercase", letterSpacing: "0.12em",
                     display: "flex", alignItems: "center", gap: 6
                   }}>
-                  {id === "lookup" && <Search size={13} />} {label}
-                </button>
+{id === "lookup" && <Search size={13} />} {id === "explorer" && <LayoutGrid size={13} />} {label}                </button>
               ))}
             </div>
             <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
@@ -1615,8 +1626,10 @@ function UserApp({ state, setState, user, onLogout, saving }) {
                   onOutcome={(outcome) => activeUnit && logOutcome(activeUnit.key, outcome)}
                   onMoveToQueue={() => activeUnit && moveToQueue(activeUnit.key)}
                 />
-              ) : (
+              ) : rightPanel === "lookup" ? (
                 <LookupTool state={state} myUnits={myUnits} />
+              ) : (
+                <BuildingExplorer state={state} user={user} role="agent" />
               )}
             </div>
           </div>
