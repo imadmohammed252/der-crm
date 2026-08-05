@@ -59,7 +59,7 @@ const THEME = `
 .explorer-rented-x{ position:absolute; top:8px; left:9px; font-size:12px; font-weight:700; color:var(--text-faint); line-height:1; }
 @keyframes explorerJumpPulse{ 0%{ box-shadow:0 0 0 0 var(--accent); } 70%{ box-shadow:0 0 0 14px transparent; } 100%{ box-shadow:0 0 0 0 transparent; } }
 .explorer-unit-card.jumped{ border-color:var(--accent); animation:explorerJumpPulse 1s ease-out 2; }
-/* ---------------------------------------------------------
+`;/* ---------------------------------------------------------
    HELPERS: dates, stats, storage keys
 --------------------------------------------------------- */
 const dayMs = 86400000;
