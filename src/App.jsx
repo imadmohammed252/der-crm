@@ -1657,7 +1657,6 @@ const TABS = [
   ["callMeBack", "Call Me Back"],
   ["unreachable", "Unreachable"],
   ["reject", "Reject"],
-  ["cold", "Cold"],
   ["yes", "Active"],
 ];
 
@@ -1680,6 +1679,7 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [channelSubTab, setChannelSubTab] = useState(null);
+  const [rejectSubTab, setRejectSubTab] = useState(null);
 
   const rows = useMemo(() => {
     return units.map(u => {
@@ -1699,7 +1699,11 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
       // When search is active, scope is the whole CRM (every bucket), matched by unit id or owner name
       return r.unit.unitId.toLowerCase().includes(q) || (r.unit.ownerName || "").toLowerCase().includes(q);
     }
-    if (bucketTab === "reject") return r.eff.display === "declined";
+        if (bucketTab === "reject") {
+      const inGroup = ["declined", "cold"].includes(r.eff.display);
+      if (!inGroup) return false;
+      return rejectSubTab ? r.eff.display === rejectSubTab : true;
+    }
     if (bucketTab === "unreachable") {
       const inGroup = ["unreachable", "whatsapp", "linkedin", "email"].includes(r.eff.display);
       if (!inGroup) return false;
@@ -1717,8 +1721,8 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
 
     const counts = Object.fromEntries(TABS.map(([id]) => [
     id,
-    id === "reject"
-      ? rows.filter(r => r.eff.display === "declined").length
+       id === "reject"
+      ? rows.filter(r => ["declined", "cold"].includes(r.eff.display)).length
       : id === "unreachable"
       ? rows.filter(r => ["unreachable", "whatsapp", "linkedin", "email"].includes(r.eff.display)).length
       : rows.filter(r => r.eff.display === id).length
@@ -1730,7 +1734,7 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
     <div style={{ width: "38%", minWidth: 300, borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", background: "var(--panel)" }}>
       <div style={{ display: "flex", flexWrap: "wrap", borderBottom: "1px solid var(--line)" }}>
                {TABS.map(([id, label]) => (
-          <button key={id} onClick={() => { setBucketTab(id); setChannelSubTab(null); }} className="tap"
+                   <button key={id} onClick={() => { setBucketTab(id); setChannelSubTab(null); setRejectSubTab(null); }} className="tap"
             style={{
               flex: "1 0 auto", padding: "11px 8px", background: "transparent", border: "none",
               borderBottom: bucketTab === id ? "1px solid var(--accent)" : "1px solid transparent",
@@ -1740,7 +1744,7 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
         ))}
       </div>
 
-      {bucketTab === "unreachable" && (
+           {bucketTab === "unreachable" && (
         <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
           {[[null, "All"], ["whatsapp", "WhatsApp"], ["email", "Email"], ["linkedin", "LinkedIn"]].map(([id, label]) => (
             <button key={label} onClick={() => setChannelSubTab(id)} className="tap"
@@ -1749,6 +1753,20 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
                 background: channelSubTab === id ? "var(--accent)" : "transparent",
                 border: channelSubTab === id ? "1px solid var(--accent)" : "1px solid var(--line)",
                 color: channelSubTab === id ? "#fff" : "var(--text-dim)", fontWeight: channelSubTab === id ? 600 : 400
+              }}>{label}</button>
+          ))}
+        </div>
+      )}
+
+      {bucketTab === "reject" && (
+        <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
+          {[[null, "All"], ["declined", "Declined"], ["cold", "Cold"]].map(([id, label]) => (
+            <button key={label} onClick={() => setRejectSubTab(id)} className="tap"
+              style={{
+                padding: "5px 11px", borderRadius: 14, fontSize: 10.5,
+                background: rejectSubTab === id ? "var(--accent)" : "transparent",
+                border: rejectSubTab === id ? "1px solid var(--accent)" : "1px solid var(--line)",
+                color: rejectSubTab === id ? "#fff" : "var(--text-dim)", fontWeight: rejectSubTab === id ? 600 : 400
               }}>{label}</button>
           ))}
         </div>
