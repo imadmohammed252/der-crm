@@ -898,14 +898,16 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
   const buildings = Object.values(state.buildings);
 
-    const wipeBuilding = (buildingId) => {
+      const wipeBuilding = (buildingId) => {
     const newUnits = {};
     Object.entries(state.units).forEach(([k, u]) => { if (u.buildingId !== buildingId) newUnits[k] = u; });
     const newCrm = {};
     Object.entries(state.crm).forEach(([k, c]) => { if (!k.startsWith(`${buildingId}::`)) newCrm[k] = c; });
     const newAssignments = { ...state.assignments };
     delete newAssignments[buildingId];
-    setState({ ...state, units: newUnits, crm: newCrm, assignments: newAssignments });
+    const newBuildings = { ...state.buildings };
+    delete newBuildings[buildingId];
+    setState({ ...state, buildings: newBuildings, units: newUnits, crm: newCrm, assignments: newAssignments });
     if (targetBuilding === buildingId) setTargetBuilding("");
   };
 
