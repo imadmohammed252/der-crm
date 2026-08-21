@@ -2021,19 +2021,8 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
               <RefreshCcw size={12} /> Move back to To Be Called
             </button>
           ))}
-        </div>
-               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <OutcomeBtn icon={Check} label="Yes" color="var(--green)" onClick={() => onOutcome("yes")} />
-          <OutcomeBtn icon={Clock} label="Call Me Back" color="var(--amber)" onClick={() => onOutcome("callMeBack")} />
-          <OutcomeBtn icon={X} label="No" color="var(--red)" onClick={() => onOutcome("no")} />
-          {!["whatsapp", "linkedin", "email"].includes(crm.bucket) && (
-            <OutcomeBtn icon={PhoneMissed} label="No Answer" color="var(--gray)" onClick={() => onOutcome("noAnswer")} />
-          )}
-        </div>
-        {crm.bucket === "unreachable" && (
-          <div style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>FOLLOW UP THROUGH</div>
-                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <OutcomeBtn icon={Check} label="Yes" color="var(--green)" onClick={() => onOutcome("yes")} />
           <OutcomeBtn icon={Clock} label="Call Me Back" color="var(--amber)" onClick={() => onOutcome("callMeBack")} />
           <OutcomeBtn icon={X} label="No" color="var(--red)" onClick={() => onOutcome("no")} />
