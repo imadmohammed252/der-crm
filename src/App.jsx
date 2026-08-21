@@ -887,18 +887,6 @@ function CustomDatePicker({ value, onChange }) {
 function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewBuildingName] = useState("");
   const [targetBuilding, setTargetBuilding] = useState("");
   const [confirmWipeBuilding, setConfirmWipeBuilding] = useState(null);
-  const deleteBuilding = (buildingId) => {
-    const newUnits = {};
-    Object.entries(state.units).forEach(([k, u]) => { if (u.buildingId !== buildingId) newUnits[k] = u; });
-    const newCrm = {};
-    Object.entries(state.crm).forEach(([k, c]) => { if (!k.startsWith(`${buildingId}::`)) newCrm[k] = c; });
-    const newAssignments = { ...state.assignments };
-    delete newAssignments[buildingId];
-    const newBuildings = { ...state.buildings };
-    delete newBuildings[buildingId];
-    setState({ ...state, buildings: newBuildings, units: newUnits, crm: newCrm, assignments: newAssignments });
-    if (targetBuilding === buildingId) setTargetBuilding("");
-  };
   const [unitFile, setUnitFile] = useState(null);
   const [ownerFile, setOwnerFile] = useState(null);
   const [unitHeaders, setUnitHeaders] = useState([]);
@@ -922,18 +910,6 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     if (targetBuilding === buildingId) setTargetBuilding("");
   };
 
-  const deleteBuilding = (buildingId) => {
-    const newUnits = {};
-    Object.entries(state.units).forEach(([k, u]) => { if (u.buildingId !== buildingId) newUnits[k] = u; });
-    const newCrm = {};
-    Object.entries(state.crm).forEach(([k, c]) => { if (!k.startsWith(`${buildingId}::`)) newCrm[k] = c; });
-    const newAssignments = { ...state.assignments };
-    delete newAssignments[buildingId];
-    const newBuildings = { ...state.buildings };
-    delete newBuildings[buildingId];
-    setState({ ...state, buildings: newBuildings, units: newUnits, crm: newCrm, assignments: newAssignments });
-    if (targetBuilding === buildingId) setTargetBuilding("");
-  };
 
   const createBuilding = () => {
     if (!newBuildingName.trim()) return;
@@ -1236,7 +1212,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
           <div style={{ marginTop: 14 }}>
            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Existing buildings</div>
                                                             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {buildings.map(b => (
+                      {buildings.map(b => (
                 <button key={b.id} onClick={() => setTargetBuilding(b.id)} className="tap"
                   style={{
                     padding: "8px 14px", borderRadius: 5, fontSize: 13,
@@ -1246,6 +1222,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
                   }}>{b.name}</button>
               ))}
             </div>
+          </div>
         )}
       </div>
 
