@@ -1983,6 +1983,9 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
             <div className="mono" style={{ fontSize: 13, color: unit.ownerContact ? "var(--accent)" : "var(--text-faint)", marginTop: 7 }}>
               {unit.ownerContact || "No contact on file"}
             </div>
+            <div className="mono" style={{ fontSize: 12, color: unit.secondaryContact ? "var(--text-dim)" : "var(--text-faint)", marginTop: 3 }}>
+              {unit.secondaryContact || "No secondary number"}
+            </div>
           </div>
           <div className="eyebrow" style={{ color: "var(--accent)", whiteSpace: "nowrap", paddingTop: 2 }}>Calling now</div>
         </div>
@@ -2013,6 +2016,7 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
         <Field label="Purchase Price" value={unit.purchasePrice ? `AED ${Number(unit.purchasePrice).toLocaleString()}` : ""} />
         <Field label="Ownership Since" value={unit.ownershipStart ? fmtDate(unit.ownershipStart) : ""} />
         <Field label="Current Market Price" value={unit.marketPrice ? `AED ${Number(unit.marketPrice).toLocaleString()}` : ""} />
+        <Field label="Email" value={unit.email} emptyText="No email" />
       </div>
 
       <TransactionsList transactions={unit.transactions} />
