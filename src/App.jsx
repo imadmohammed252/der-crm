@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import {
-  Building2, Search, Upload, LogOut, ArrowRightLeft, Phone,
+    Building2, Search, Upload, LogOut, ArrowRightLeft, Phone,
   PhoneMissed, PhoneOff, Check, X, Clock, ChevronRight, RefreshCcw,
-  Users, LayoutGrid, ClipboardList, AlertTriangle, Trash2, Settings, Eye, EyeOff, Skull, Calendar
+  Users, LayoutGrid, ClipboardList, AlertTriangle, Trash2, Settings, Eye, EyeOff, Skull, Calendar,
+  MessageCircle, Mail, Briefcase
 } from "lucide-react";
 
 /* ---------------------------------------------------------
