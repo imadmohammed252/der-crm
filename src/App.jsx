@@ -20,8 +20,9 @@ const THEME = `
   --red:#D9552E; --red-dim:#3A1C11;
   --green:#7E8C6A; --green-dim:#232719;
   --amber:#C08A3E; --amber-dim:#2E2213;
-  --violet:#8A7B6E; --violet-dim:#241E1A;
+    --violet:#8A7B6E; --violet-dim:#241E1A;
   --gray:#6E655D; --gray-dim:#1F1B18;
+  --blue:#5E7A94; --blue-dim:#1A222B;
 }
 .rcrm{ font-family:'Inter',sans-serif; color:var(--text); background:var(--bg); }
 .rcrm .disp{ font-family:'Playfair Display',Georgia,serif; letter-spacing:-0.015em; }
@@ -188,19 +189,25 @@ function computeDemand(unit, buildingUnits) {
 const BUCKET_LABEL = {
   toBeCalled: "To Be Called",
   callMeBack: "Call Me Back",
-  noAnswer: "No Answer",
-  declined: "Declined",
   unreachable: "Unreachable",
+  declined: "Declined",
+  cold: "Cold",
   yes: "Active Client",
+  whatsapp: "WhatsApp",
+  linkedin: "LinkedIn",
+  email: "Email",
 };
 const OUTCOME_LABEL = { yes: "Yes", callMeBack: "Call Me Back", no: "No / Declined", noAnswer: "No Answer" };
 const BUCKET_COLOR = {
   toBeCalled: "var(--accent)",
   callMeBack: "var(--amber)",
-  noAnswer: "var(--gray)",
+  unreachable: "var(--gray)",
   declined: "var(--red)",
-  unreachable: "var(--violet)",
+  cold: "var(--violet)",
   yes: "var(--green)",
+  whatsapp: "var(--green)",
+  linkedin: "var(--blue)",
+  email: "var(--gray)",
 };
 
 function defaultCrm() {
@@ -212,7 +219,7 @@ function effectiveBucket(crm) {
   if (!crm) return { display: "toBeCalled", resurfaced: false };
   if (crm.bucket === "toBeCalled") return { display: "toBeCalled", resurfaced: false };
   if (crm.bucket === "yes") return { display: "yes", resurfaced: false };
-  if (["callMeBack", "noAnswer", "declined", "unreachable"].includes(crm.bucket) && isDue(crm.nextActionDate)) {
+    if (["callMeBack", "unreachable", "declined", "cold"].includes(crm.bucket) && isDue(crm.nextActionDate)) {
     return { display: "toBeCalled", resurfaced: true, origin: crm.bucket };
   }
   return { display: crm.bucket, resurfaced: false };
@@ -229,13 +236,15 @@ function applyOutcome(crm, outcome) {
     c.bucket = "callMeBack"; c.nextActionDate = startOfNextDay(now).toISOString();
   } else if (outcome === "no") {
     c.bucket = "declined"; c.nextActionDate = addMonths(now, 6).toISOString(); c.tag = "declined";
-  } else if (outcome === "noAnswer") {
+    } else if (outcome === "noAnswer") {
     c.noAnswerCount = (c.noAnswerCount || 0) + 1;
     if (c.noAnswerCount >= 3) {
-      c.bucket = "unreachable"; c.nextActionDate = addMonths(now, 6).toISOString(); c.tag = "unreachable";
+      c.bucket = "cold"; c.nextActionDate = addMonths(now, 6).toISOString(); c.tag = "cold";
     } else {
-      c.bucket = "noAnswer"; c.nextActionDate = addDays(now, 3).toISOString();
+      c.bucket = "unreachable"; c.nextActionDate = addDays(now, 3).toISOString();
     }
+  } else if (["whatsapp", "linkedin", "email"].includes(outcome)) {
+    c.bucket = outcome;
   }
   return c;
 }
@@ -1646,8 +1655,9 @@ function UserApp({ state, setState, user, onLogout, saving }) {
 const TABS = [
   ["toBeCalled", "To Be Called"],
   ["callMeBack", "Call Me Back"],
-  ["noAnswer", "No Answer"],
+  ["unreachable", "Unreachable"],
   ["reject", "Reject"],
+  ["cold", "Cold"],
   ["yes", "Active"],
 ];
 
@@ -1669,6 +1679,7 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [channelSubTab, setChannelSubTab] = useState(null);
 
   const rows = useMemo(() => {
     return units.map(u => {
@@ -1683,12 +1694,17 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
   const searchActive = searchOpen && searchQuery.trim().length > 0;
   const q = searchQuery.trim().toLowerCase();
 
-  const bucketFiltered = rows.filter(r => {
+    const bucketFiltered = rows.filter(r => {
     if (searchActive) {
       // When search is active, scope is the whole CRM (every bucket), matched by unit id or owner name
       return r.unit.unitId.toLowerCase().includes(q) || (r.unit.ownerName || "").toLowerCase().includes(q);
     }
-    if (bucketTab === "reject") return ["declined", "unreachable"].includes(r.eff.display);
+    if (bucketTab === "reject") return r.eff.display === "declined";
+    if (bucketTab === "unreachable") {
+      const inGroup = ["unreachable", "whatsapp", "linkedin", "email"].includes(r.eff.display);
+      if (!inGroup) return false;
+      return channelSubTab ? r.eff.display === channelSubTab : true;
+    }
     return r.eff.display === bucketTab;
   });
 
@@ -1699,10 +1715,12 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
     return b.rank - a.rank; // easy to rent: high volatility, low demand — highest rank first
   });
 
-  const counts = Object.fromEntries(TABS.map(([id]) => [
+    const counts = Object.fromEntries(TABS.map(([id]) => [
     id,
     id === "reject"
-      ? rows.filter(r => ["declined", "unreachable"].includes(r.eff.display)).length
+      ? rows.filter(r => r.eff.display === "declined").length
+      : id === "unreachable"
+      ? rows.filter(r => ["unreachable", "whatsapp", "linkedin", "email"].includes(r.eff.display)).length
       : rows.filter(r => r.eff.display === id).length
   ]));
 
@@ -1711,8 +1729,8 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
   return (
     <div style={{ width: "38%", minWidth: 300, borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", background: "var(--panel)" }}>
       <div style={{ display: "flex", flexWrap: "wrap", borderBottom: "1px solid var(--line)" }}>
-        {TABS.map(([id, label]) => (
-          <button key={id} onClick={() => setBucketTab(id)} className="tap"
+               {TABS.map(([id, label]) => (
+          <button key={id} onClick={() => { setBucketTab(id); setChannelSubTab(null); }} className="tap"
             style={{
               flex: "1 0 auto", padding: "11px 8px", background: "transparent", border: "none",
               borderBottom: bucketTab === id ? "1px solid var(--accent)" : "1px solid transparent",
@@ -1721,6 +1739,20 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
             }}>{label} <span style={{ color: bucketTab === id ? "var(--accent)" : "var(--text-faint)" }}>{counts[id]}</span></button>
         ))}
       </div>
+
+      {bucketTab === "unreachable" && (
+        <div style={{ display: "flex", gap: 6, padding: "8px 12px", borderBottom: "1px solid var(--line)", flexWrap: "wrap" }}>
+          {[[null, "All"], ["whatsapp", "WhatsApp"], ["email", "Email"], ["linkedin", "LinkedIn"]].map(([id, label]) => (
+            <button key={label} onClick={() => setChannelSubTab(id)} className="tap"
+              style={{
+                padding: "5px 11px", borderRadius: 14, fontSize: 10.5,
+                background: channelSubTab === id ? "var(--accent)" : "transparent",
+                border: channelSubTab === id ? "1px solid var(--accent)" : "1px solid var(--line)",
+                color: channelSubTab === id ? "#fff" : "var(--text-dim)", fontWeight: channelSubTab === id ? 600 : 400
+              }}>{label}</button>
+          ))}
+        </div>
+      )}
 
       <div style={{ borderBottom: "1px solid var(--line)" }}>
         <div style={{ display: "flex", alignItems: "stretch" }}>
@@ -1821,12 +1853,12 @@ function UnitRow({ unit, crm, eff, volatility, demand, active, onToggle, onMoveT
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           {eff.resurfaced && (
             <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 5, background: BUCKET_COLOR[eff.origin] + "22", color: BUCKET_COLOR[eff.origin] }}>
-              back from {BUCKET_LABEL[eff.origin]}{eff.origin === "noAnswer" ? ` ×${crm.noAnswerCount}` : ""}
+                            back from {BUCKET_LABEL[eff.origin]}{eff.origin === "unreachable" ? ` ×${crm.noAnswerCount}` : ""}
             </span>
           )}
           {crm.bucket !== "toBeCalled" && !eff.resurfaced && (
             <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 5, background: BUCKET_COLOR[crm.bucket] + "22", color: BUCKET_COLOR[crm.bucket] }}>
-              {crm.bucket === "callMeBack" || crm.bucket === "noAnswer" ? `in ${daysUntil(crm.nextActionDate)}d` : BUCKET_LABEL[crm.bucket]}
+                            {crm.bucket === "callMeBack" || crm.bucket === "unreachable" ? `in ${daysUntil(crm.nextActionDate)}d` : BUCKET_LABEL[crm.bucket]}
             </span>
           )}
           {onMoveToQueue && (confirmingMove ? (
@@ -1990,12 +2022,35 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <OutcomeBtn icon={Check} label="Yes" color="var(--green)" onClick={() => onOutcome("yes")} />
           <OutcomeBtn icon={Clock} label="Call Me Back" color="var(--amber)" onClick={() => onOutcome("callMeBack")} />
           <OutcomeBtn icon={X} label="No" color="var(--red)" onClick={() => onOutcome("no")} />
-          <OutcomeBtn icon={PhoneMissed} label="No Answer" color="var(--gray)" onClick={() => onOutcome("noAnswer")} />
+          {!["whatsapp", "linkedin", "email"].includes(crm.bucket) && (
+            <OutcomeBtn icon={PhoneMissed} label="No Answer" color="var(--gray)" onClick={() => onOutcome("noAnswer")} />
+          )}
         </div>
+        {crm.bucket === "unreachable" && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>FOLLOW UP THROUGH</div>
+                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <OutcomeBtn icon={Check} label="Yes" color="var(--green)" onClick={() => onOutcome("yes")} />
+          <OutcomeBtn icon={Clock} label="Call Me Back" color="var(--amber)" onClick={() => onOutcome("callMeBack")} />
+          <OutcomeBtn icon={X} label="No" color="var(--red)" onClick={() => onOutcome("no")} />
+          {!["whatsapp", "linkedin", "email"].includes(crm.bucket) && (
+            <OutcomeBtn icon={PhoneMissed} label="No Answer" color="var(--gray)" onClick={() => onOutcome("noAnswer")} />
+          )}
+        </div>
+        {crm.bucket === "unreachable" && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>FOLLOW UP THROUGH</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <OutcomeBtn icon={MessageCircle} label="WhatsApp" color="var(--green)" onClick={() => onOutcome("whatsapp")} />
+              <OutcomeBtn icon={Mail} label="Email" color="var(--gray)" onClick={() => onOutcome("email")} />
+              <OutcomeBtn icon={Briefcase} label="LinkedIn" color="var(--blue)" onClick={() => onOutcome("linkedin")} />
+            </div>
+          </div>
+        )}
         {crm.lastOutcome && (
           <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginTop: 8 }}>
             Last logged: {BUCKET_LABEL[crm.bucket] || crm.lastOutcome} on {fmtDate(crm.lastCallDate)}
