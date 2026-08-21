@@ -93,6 +93,8 @@ const CANDIDATES = {
   bathrooms: ["bathrooms", "bath", "baths"],
   ownerName: ["owner name", "owner", "name"],
   ownerContact: ["owner contact", "contact", "phone", "owner phone", "mobile"],
+  secondaryContact: ["secondary contact", "secondary number", "secondary phone", "alternate number", "alternate contact", "second phone"],
+  email: ["email", "email address", "owner email", "e-mail"],
   ownershipStart: ["ownership start", "ownership start date", "purchase date", "acquired"],
   purchasePrice: ["purchase price", "price", "purchase amount"],
   currentRent: ["current rent", "rent", "monthly rent", "asking rent"],
@@ -1067,6 +1069,8 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
       ownerByUnit[nid] = {
         ownerName: getMapped(r, ownerMap, "ownerName"),
         ownerContact: getMapped(r, ownerMap, "ownerContact"),
+        secondaryContact: getMapped(r, ownerMap, "secondaryContact"),
+        email: getMapped(r, ownerMap, "email"),
         ownershipStart: getMapped(r, ownerMap, "ownershipStart"),
         purchasePrice: getMapped(r, ownerMap, "purchasePrice"),
       };
@@ -1097,6 +1101,8 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         bathrooms: pick(getMapped(r, unitMap, "bathrooms"), "bathrooms"),
         ownerName: owner.ownerName || existing.ownerName || "",
         ownerContact: owner.ownerContact || existing.ownerContact || "",
+        secondaryContact: owner.secondaryContact || existing.secondaryContact || "",
+        email: owner.email || existing.email || "",
         ownershipStart: owner.ownershipStart || existing.ownershipStart || "",
         purchasePrice: owner.purchasePrice || existing.purchasePrice || "",
         currentRent: pick(getMapped(r, unitMap, "currentRent"), "currentRent"),
@@ -1938,12 +1944,12 @@ function TransactionsList({ transactions }) {
   );
 }
 
-function Field({ label, value }) {
+function Field({ label, value, emptyText }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <div className="eyebrow" style={{ color: "var(--text-faint)" }}>{label}</div>
       <div style={{ fontSize: 14, color: value ? "var(--text)" : "var(--text-faint)" }}>
-        {value || <em>not available</em>}
+        {value || <em>{emptyText || "not available"}</em>}
       </div>
     </div>
   );
@@ -2149,6 +2155,8 @@ function LookupTool({ myUnits }) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
                   <Field label="Owner" value={u.ownerName} />
                   <Field label="Contact" value={u.ownerContact} />
+                  <Field label="Secondary Number" value={u.secondaryContact} emptyText="No secondary number" />
+                  <Field label="Email" value={u.email} emptyText="No email" />
                   <Field label="Bedrooms" value={u.bedrooms} />
                   <Field label="Built-up Area" value={u.carpetArea ? `${u.carpetArea} sqft` : ""} />
                  <Field label="Current Rent" value={u.currentRent ? `AED ${Number(u.currentRent).toLocaleString()}` : ""} />
