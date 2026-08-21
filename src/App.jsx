@@ -887,6 +887,7 @@ function CustomDatePicker({ value, onChange }) {
 function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewBuildingName] = useState("");
   const [targetBuilding, setTargetBuilding] = useState("");
   const [confirmWipeBuilding, setConfirmWipeBuilding] = useState(null);
+  const [confirmDeleteBuilding, setConfirmDeleteBuilding] = useState(null);
   const [unitFile, setUnitFile] = useState(null);
   const [ownerFile, setOwnerFile] = useState(null);
   const [unitHeaders, setUnitHeaders] = useState([]);
@@ -897,7 +898,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
   const buildings = Object.values(state.buildings);
 
-  const wipeBuilding = (buildingId) => {
+    const wipeBuilding = (buildingId) => {
     const newUnits = {};
     Object.entries(state.units).forEach(([k, u]) => { if (u.buildingId !== buildingId) newUnits[k] = u; });
     const newCrm = {};
@@ -905,6 +906,19 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     const newAssignments = { ...state.assignments };
     delete newAssignments[buildingId];
     setState({ ...state, units: newUnits, crm: newCrm, assignments: newAssignments });
+    if (targetBuilding === buildingId) setTargetBuilding("");
+  };
+
+  const deleteBuilding = (buildingId) => {
+    const newUnits = {};
+    Object.entries(state.units).forEach(([k, u]) => { if (u.buildingId !== buildingId) newUnits[k] = u; });
+    const newCrm = {};
+    Object.entries(state.crm).forEach(([k, c]) => { if (!k.startsWith(`${buildingId}::`)) newCrm[k] = c; });
+    const newAssignments = { ...state.assignments };
+    delete newAssignments[buildingId];
+    const newBuildings = { ...state.buildings };
+    delete newBuildings[buildingId];
+    setState({ ...state, buildings: newBuildings, units: newUnits, crm: newCrm, assignments: newAssignments });
     if (targetBuilding === buildingId) setTargetBuilding("");
   };
 
@@ -1208,15 +1222,30 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         {buildings.length > 0 && (
           <div style={{ marginTop: 14 }}>
            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Existing buildings</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {buildings.map(b => (
-                <button key={b.id} onClick={() => setTargetBuilding(b.id)} className="tap"
-                  style={{
-                    padding: "8px 14px", borderRadius: 5, fontSize: 13,
-                    background: targetBuilding === b.id ? "var(--accent-dim)" : "var(--panel-2)",
-                    border: targetBuilding === b.id ? "1px solid var(--accent)" : "1px solid var(--line)",
-                    color: "var(--text)"
-                  }}>{b.name}</button>
+                <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <button onClick={() => setTargetBuilding(b.id)} className="tap"
+                    style={{
+                      padding: "8px 14px", borderRadius: 5, fontSize: 13,
+                      background: targetBuilding === b.id ? "var(--accent-dim)" : "var(--panel-2)",
+                      border: targetBuilding === b.id ? "1px solid var(--accent)" : "1px solid var(--line)",
+                      color: "var(--text)"
+                    }}>{b.name}</button>
+                  {confirmDeleteBuilding === b.id ? (
+                    <>
+                      <button onClick={() => { deleteBuilding(b.id); setConfirmDeleteBuilding(null); }} className="tap"
+                        style={{ background: "var(--red)", border: "none", color: "#fff", padding: "8px 10px", borderRadius: 5, fontSize: 11, fontWeight: 600 }}>Confirm</button>
+                      <button onClick={() => setConfirmDeleteBuilding(null)} className="tap"
+                        style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "8px 10px", borderRadius: 5, fontSize: 11 }}>Cancel</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteBuilding(b.id)} className="tap" title={`Delete ${b.name} entirely`}
+                      style={{ background: "transparent", border: "1px solid var(--line)", color: "var(--text-dim)", padding: "8px 9px", borderRadius: 5 }}>
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
