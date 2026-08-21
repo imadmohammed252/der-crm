@@ -1235,7 +1235,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         {buildings.length > 0 && (
           <div style={{ marginTop: 14 }}>
            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 6 }}>Existing buildings</div>
-                                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {buildings.map(b => (
                 <button key={b.id} onClick={() => setTargetBuilding(b.id)} className="tap"
                   style={{
@@ -1246,7 +1246,6 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
                   }}>{b.name}</button>
               ))}
             </div>
-          </div>
         )}
       </div>
 
