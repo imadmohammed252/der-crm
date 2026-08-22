@@ -1141,7 +1141,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     bedrooms: "Bedrooms", bathrooms: "Bathrooms", currentRent: "Current Rent",
     currentLeaseStart: "Current Lease Start", currentLeaseEnd: "Current Lease End",
     status: "Status (occupied/vacant)",
-    ownerName: "Owner Name", ownerContact: "Owner Contact", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
+    ownerName: "Owner Name", ownerContact: "Owner Contact", secondaryContact: "Secondary Number", email: "Email", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
   };
 
   // Fully automatic by default — the file is read, columns are detected,
@@ -1245,7 +1245,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
         <UploadBlock title="Owner data (optional)" hint="Must also include a Unit ID column so it can join to the unit file."
           file={ownerFile} setter={setOwnerFile} headers={ownerHeaders} setHeaders={setOwnerHeaders}
-          fieldList={["unitId", "ownerName", "ownerContact", "ownershipStart", "purchasePrice"]}
+          fieldList={["unitId", "ownerName", "ownerContact", "secondaryContact", "email", "ownershipStart", "purchasePrice"]}
           map={ownerMap} setMap={setOwnerMap} />
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, flexWrap: "wrap", gap: 10 }}>
