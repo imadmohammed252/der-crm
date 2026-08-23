@@ -2428,7 +2428,6 @@ function BuildingExplorer({ state, user, role }) {
                 <Field label="Current Rent" value={modalUnit.currentRent ? `AED ${Number(modalUnit.currentRent).toLocaleString()}` : ""} />
                 <Field label="Current Market Price" value={modalUnit.marketPrice ? `AED ${Number(modalUnit.marketPrice).toLocaleString()}` : ""} />
               </div>
-              </div>
             </div>
           </div>
         )}
