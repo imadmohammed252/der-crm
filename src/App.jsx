@@ -102,12 +102,6 @@ const CANDIDATES = {
   currentLeaseStart: ["current lease start", "lease start", "current lease start date", "start date"],
   currentLeaseEnd: ["current lease end", "lease end", "current lease end date", "end date"],
   status: ["status", "occupancy", "occupied", "vacant"],
-  latestSaleDate: ["latest sale date"],
-  latestSaleType: ["latest sale type"],
-  latestSaleAmount: ["latest sale amount (aed)", "latest sale amount"],
-  latestRentalStart: ["latest rental start"],
-  latestRentalEnd: ["latest rental end"],
-  latestRentalAmount: ["latest rental amount (aed)", "latest rental amount"],
 };
 function getField(row, key) {
   const cands = CANDIDATES[key] || [];
@@ -1114,26 +1108,6 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         currentLeaseStart: pick(getMapped(r, unitMap, "currentLeaseStart"), "currentLeaseStart"),
         currentLeaseEnd: pick(getMapped(r, unitMap, "currentLeaseEnd"), "currentLeaseEnd"),
         status: normStatus(getMapped(r, unitMap, "status")) || existing.status || "",
-        transactions: (() => {
-          const list = [];
-          const saleAmt = pick(getMapped(r, unitMap, "latestSaleAmount"), "latestSaleAmount");
-          if (saleAmt) {
-            list.push({
-              date: pick(getMapped(r, unitMap, "latestSaleDate"), "latestSaleDate"),
-              amount: saleAmt,
-              type: pick(getMapped(r, unitMap, "latestSaleType"), "latestSaleType") || "Sale",
-            });
-          }
-          const rentAmt = pick(getMapped(r, unitMap, "latestRentalAmount"), "latestRentalAmount");
-          if (rentAmt) {
-            list.push({
-              date: pick(getMapped(r, unitMap, "latestRentalStart"), "latestRentalStart"),
-              amount: rentAmt,
-              type: "Rental",
-            });
-          }
-          return list.length ? list : existing.transactions || [];
-        })(),
         statusUpdated: new Date().toISOString(),
         assignedTo: existing.assignedTo ?? null,
       };
@@ -1167,8 +1141,6 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     currentLeaseStart: "Current Lease Start", currentLeaseEnd: "Current Lease End",
     status: "Status (occupied/vacant)",
     ownerName: "Owner Name", ownerContact: "Owner Contact", secondaryContact: "Secondary Number", email: "Email", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
-    latestSaleDate: "Latest Sale Date", latestSaleType: "Latest Sale Type", latestSaleAmount: "Latest Sale Amount",
-    latestRentalStart: "Latest Rental Start", latestRentalEnd: "Latest Rental End", latestRentalAmount: "Latest Rental Amount",
   };
 
   // Fully automatic by default — the file is read, columns are detected,
@@ -1267,7 +1239,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
         <UploadBlock title="Unit data (required)" hint="Needs at minimum a Unit ID / Unit Number / Property No column."
           file={unitFile} setter={setUnitFile} headers={unitHeaders} setHeaders={setUnitHeaders}
-          fieldList={["unitId", "unitType", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status", "ownershipStart", "purchasePrice", "latestSaleDate", "latestSaleType", "latestSaleAmount", "latestRentalStart", "latestRentalEnd", "latestRentalAmount"]}
+          fieldList={["unitId", "unitType", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status", "ownershipStart", "purchasePrice"]}
           map={unitMap} setMap={setUnitMap} />
 
         <UploadBlock title="Owner data (optional)" hint="Must also include a Unit ID column so it can join to the unit file."
@@ -1950,26 +1922,6 @@ function UnitRow({ unit, crm, eff, volatility, demand, active, onToggle, onMoveT
 /* ---------------------------------------------------------
    DETAIL PANE (right) — the split-screen "everything at a touch" view
 --------------------------------------------------------- */
-function TransactionsList({ transactions }) {
-  const list = transactions || [];
-  return (
-    <div>
-      <div className="eyebrow" style={{ color: "var(--text-faint)", marginBottom: 6 }}>Recent Transactions</div>
-      {list.length === 0 ? (
-        <div style={{ fontSize: 14, color: "var(--text-faint)" }}><em>not available</em></div>
-      ) : (
-        <div style={{ maxHeight: 130, overflow: "auto", display: "flex", flexDirection: "column", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 8px" }}>
-          {list.slice(0, 4).map((t, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "8px 2px", borderBottom: i < Math.min(list.length, 4) - 1 ? "1px solid var(--line)" : "none" }}>
-              <span style={{ color: "var(--text-dim)" }}>{fmtDate(t.date)}</span>
-              <span>{t.amount ? `AED ${Number(t.amount).toLocaleString()}` : "—"}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function Field({ label, value, emptyText }) {
   return (
@@ -2046,8 +1998,6 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
         <Field label="Current Market Price" value={unit.marketPrice ? `AED ${Number(unit.marketPrice).toLocaleString()}` : ""} />
         <Field label="Email" value={unit.email} emptyText="No email" />
       </div>
-
-      <TransactionsList transactions={unit.transactions} />
 
       {/* Notes */}
       <div>
@@ -2195,8 +2145,6 @@ function LookupTool({ myUnits }) {
                  <Field label="Current Rent" value={u.currentRent ? `AED ${Number(u.currentRent).toLocaleString()}` : ""} />
                   <Field label="Current Market Price" value={u.marketPrice ? `AED ${Number(u.marketPrice).toLocaleString()}` : ""} />
                 </div>
-                <div style={{ marginTop: 12 }}>
-                  <TransactionsList transactions={u.transactions} />
                 </div>
                 <div style={{ fontSize: 10.5, color: "var(--text-faint)", marginTop: 10 }}>Reference only. Outcomes can't be logged from lookup. Open the CRM queue to call this unit.</div>
               </div>
@@ -2481,7 +2429,7 @@ function BuildingExplorer({ state, user, role }) {
                 <Field label="Current Rent" value={modalUnit.currentRent ? `AED ${Number(modalUnit.currentRent).toLocaleString()}` : ""} />
                 <Field label="Current Market Price" value={modalUnit.marketPrice ? `AED ${Number(modalUnit.marketPrice).toLocaleString()}` : ""} />
               </div>
-              <TransactionsList transactions={modalUnit.transactions} />
+              </div>
             </div>
           </div>
         )}
