@@ -2145,7 +2145,6 @@ function LookupTool({ myUnits }) {
                  <Field label="Current Rent" value={u.currentRent ? `AED ${Number(u.currentRent).toLocaleString()}` : ""} />
                   <Field label="Current Market Price" value={u.marketPrice ? `AED ${Number(u.marketPrice).toLocaleString()}` : ""} />
                 </div>
-                </div>
                 <div style={{ fontSize: 10.5, color: "var(--text-faint)", marginTop: 10 }}>Reference only. Outcomes can't be logged from lookup. Open the CRM queue to call this unit.</div>
               </div>
             );
