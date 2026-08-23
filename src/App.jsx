@@ -87,6 +87,7 @@ const STORAGE_KEY = "rental-crm-state-v1";
 --------------------------------------------------------- */
 const CANDIDATES = {
   unitId: ["unit id", "unitid", "unit", "unit number", "unit no", "unit no.", "property no", "property number"],
+  unitType: ["unit type", "type", "unit type code", "apartment type"],
   floor: ["floor", "floor level"],
   carpetArea: ["carpet area", "area", "sqft", "sq ft", "size", "built-up area (sqft)", "built-up area"],
   bedrooms: ["bedrooms", "bed", "beds", "bhk"],
@@ -1094,7 +1095,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
       const pick = (val, prevField) => val || existing[prevField] || "";
       units[key] = {
         ...existing,
-        key, unitId: uid, buildingId: targetBuilding,
+        key, unitId: uid, unitType: pick(getMapped(r, unitMap, "unitType"), "unitType"), buildingId: targetBuilding,
         floor: pick(getMapped(r, unitMap, "floor"), "floor"),
         carpetArea: pick(getMapped(r, unitMap, "carpetArea"), "carpetArea"),
         bedrooms: pick(getMapped(r, unitMap, "bedrooms"), "bedrooms"),
@@ -1137,7 +1138,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
   };
 
   const FIELD_LABEL = {
-    unitId: "Unit ID / Unit Number *", floor: "Floor", carpetArea: "Carpet Area",
+    unitId: "Unit ID / Unit Number *", unitType: "Unit Type", floor: "Floor", carpetArea: "Carpet Area",
     bedrooms: "Bedrooms", bathrooms: "Bathrooms", currentRent: "Current Rent",
     currentLeaseStart: "Current Lease Start", currentLeaseEnd: "Current Lease End",
     status: "Status (occupied/vacant)",
@@ -1240,7 +1241,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
         <UploadBlock title="Unit data (required)" hint="Needs at minimum a Unit ID / Unit Number / Property No column."
           file={unitFile} setter={setUnitFile} headers={unitHeaders} setHeaders={setUnitHeaders}
-          fieldList={["unitId", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status"]}
+          fieldList={["unitId", "unitType", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status"]}
           map={unitMap} setMap={setUnitMap} />
 
         <UploadBlock title="Owner data (optional)" hint="Must also include a Unit ID column so it can join to the unit file."
@@ -2008,6 +2009,7 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
       {/* Core fields */}
       <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Field label="Floor" value={unit.floor} />
+        <Field label="Unit Type" value={unit.unitType} />
         <Field label="Carpet Area" value={unit.carpetArea ? `${unit.carpetArea} sqft` : ""} />
         <Field label="Bed / Bath" value={unit.bedrooms || unit.bathrooms ? `${unit.bedrooms || "—"} bed / ${unit.bathrooms || "—"} bath` : ""} />
         <Field label="Current Rent" value={unit.currentRent ? `AED ${Number(unit.currentRent).toLocaleString()}` : ""} />
@@ -2161,6 +2163,7 @@ function LookupTool({ myUnits }) {
                   <Field label="Contact" value={u.ownerContact} />
                   <Field label="Secondary Number" value={u.secondaryContact} emptyText="No secondary number" />
                   <Field label="Email" value={u.email} emptyText="No email" />
+                  <Field label="Unit Type" value={u.unitType} />
                   <Field label="Bedrooms" value={u.bedrooms} />
                   <Field label="Built-up Area" value={u.carpetArea ? `${u.carpetArea} sqft` : ""} />
                  <Field label="Current Rent" value={u.currentRent ? `AED ${Number(u.currentRent).toLocaleString()}` : ""} />
@@ -2446,6 +2449,7 @@ function BuildingExplorer({ state, user, role }) {
                 <div style={{ display: "inline-block", fontSize: 10.5, color: "var(--text-faint)", border: "1px solid var(--line)", borderRadius: 12, padding: "3px 10px", marginBottom: 14 }}>&times; Currently rented</div>
               )}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                <Field label="Unit Type" value={modalUnit.unitType} />
                 <Field label="Owner" value={modalUnit.ownerName} />
                 <Field label="Contact" value={modalUnit.ownerContact} />
                 <Field label="Current Rent" value={modalUnit.currentRent ? `AED ${Number(modalUnit.currentRent).toLocaleString()}` : ""} />
