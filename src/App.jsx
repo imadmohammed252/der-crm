@@ -102,6 +102,12 @@ const CANDIDATES = {
   currentLeaseStart: ["current lease start", "lease start", "current lease start date", "start date"],
   currentLeaseEnd: ["current lease end", "lease end", "current lease end date", "end date"],
   status: ["status", "occupancy", "occupied", "vacant"],
+  latestSaleDate: ["latest sale date"],
+  latestSaleType: ["latest sale type"],
+  latestSaleAmount: ["latest sale amount (aed)", "latest sale amount"],
+  latestRentalStart: ["latest rental start"],
+  latestRentalEnd: ["latest rental end"],
+  latestRentalAmount: ["latest rental amount (aed)", "latest rental amount"],
 };
 function getField(row, key) {
   const cands = CANDIDATES[key] || [];
@@ -1108,6 +1114,26 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         currentLeaseStart: pick(getMapped(r, unitMap, "currentLeaseStart"), "currentLeaseStart"),
         currentLeaseEnd: pick(getMapped(r, unitMap, "currentLeaseEnd"), "currentLeaseEnd"),
         status: normStatus(getMapped(r, unitMap, "status")) || existing.status || "",
+        transactions: (() => {
+          const list = [];
+          const saleAmt = pick(getMapped(r, unitMap, "latestSaleAmount"), "latestSaleAmount");
+          if (saleAmt) {
+            list.push({
+              date: pick(getMapped(r, unitMap, "latestSaleDate"), "latestSaleDate"),
+              amount: saleAmt,
+              type: pick(getMapped(r, unitMap, "latestSaleType"), "latestSaleType") || "Sale",
+            });
+          }
+          const rentAmt = pick(getMapped(r, unitMap, "latestRentalAmount"), "latestRentalAmount");
+          if (rentAmt) {
+            list.push({
+              date: pick(getMapped(r, unitMap, "latestRentalStart"), "latestRentalStart"),
+              amount: rentAmt,
+              type: "Rental",
+            });
+          }
+          return list.length ? list : existing.transactions || [];
+        })(),
         statusUpdated: new Date().toISOString(),
         assignedTo: existing.assignedTo ?? null,
       };
@@ -1141,6 +1167,8 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     currentLeaseStart: "Current Lease Start", currentLeaseEnd: "Current Lease End",
     status: "Status (occupied/vacant)",
     ownerName: "Owner Name", ownerContact: "Owner Contact", secondaryContact: "Secondary Number", email: "Email", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
+    latestSaleDate: "Latest Sale Date", latestSaleType: "Latest Sale Type", latestSaleAmount: "Latest Sale Amount",
+    latestRentalStart: "Latest Rental Start", latestRentalEnd: "Latest Rental End", latestRentalAmount: "Latest Rental Amount",
   };
 
   // Fully automatic by default — the file is read, columns are detected,
@@ -1239,7 +1267,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
         <UploadBlock title="Unit data (required)" hint="Needs at minimum a Unit ID / Unit Number / Property No column."
           file={unitFile} setter={setUnitFile} headers={unitHeaders} setHeaders={setUnitHeaders}
-          fieldList={["unitId", "unitType", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status", "ownershipStart", "purchasePrice"]}
+          fieldList={["unitId", "unitType", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status", "ownershipStart", "purchasePrice", "latestSaleDate", "latestSaleType", "latestSaleAmount", "latestRentalStart", "latestRentalEnd", "latestRentalAmount"]}
           map={unitMap} setMap={setUnitMap} />
 
         <UploadBlock title="Owner data (optional)" hint="Must also include a Unit ID column so it can join to the unit file."
