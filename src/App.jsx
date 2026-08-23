@@ -1072,8 +1072,6 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         ownerContact: getMapped(r, ownerMap, "ownerContact"),
         secondaryContact: getMapped(r, ownerMap, "secondaryContact"),
         email: getMapped(r, ownerMap, "email"),
-        ownershipStart: getMapped(r, ownerMap, "ownershipStart"),
-        purchasePrice: getMapped(r, ownerMap, "purchasePrice"),
       };
       if (unitIdSet.has(nid)) ownerMatched++;
       else if (ownerUnmatchedSample.length < 5) ownerUnmatchedSample.push(uidRaw);
@@ -1104,8 +1102,8 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         ownerContact: owner.ownerContact || existing.ownerContact || "",
         secondaryContact: owner.secondaryContact || existing.secondaryContact || "",
         email: owner.email || existing.email || "",
-        ownershipStart: owner.ownershipStart || existing.ownershipStart || "",
-        purchasePrice: owner.purchasePrice || existing.purchasePrice || "",
+        ownershipStart: pick(getMapped(r, unitMap, "ownershipStart"), "ownershipStart") || existing.ownershipStart || "",
+        purchasePrice: pick(getMapped(r, unitMap, "purchasePrice"), "purchasePrice") || existing.purchasePrice || "",
         currentRent: pick(getMapped(r, unitMap, "currentRent"), "currentRent"),
         currentLeaseStart: pick(getMapped(r, unitMap, "currentLeaseStart"), "currentLeaseStart"),
         currentLeaseEnd: pick(getMapped(r, unitMap, "currentLeaseEnd"), "currentLeaseEnd"),
@@ -1241,12 +1239,12 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
         <UploadBlock title="Unit data (required)" hint="Needs at minimum a Unit ID / Unit Number / Property No column."
           file={unitFile} setter={setUnitFile} headers={unitHeaders} setHeaders={setUnitHeaders}
-          fieldList={["unitId", "unitType", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status"]}
+          fieldList={["unitId", "unitType", "floor", "carpetArea", "bedrooms", "bathrooms", "currentRent", "currentLeaseStart", "currentLeaseEnd", "status", "ownershipStart", "purchasePrice"]}
           map={unitMap} setMap={setUnitMap} />
 
         <UploadBlock title="Owner data (optional)" hint="Must also include a Unit ID column so it can join to the unit file."
           file={ownerFile} setter={setOwnerFile} headers={ownerHeaders} setHeaders={setOwnerHeaders}
-          fieldList={["unitId", "ownerName", "ownerContact", "secondaryContact", "email", "ownershipStart", "purchasePrice"]}
+          fieldList={["unitId", "ownerName", "ownerContact", "secondaryContact", "email"]}
           map={ownerMap} setMap={setOwnerMap} />
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, flexWrap: "wrap", gap: 10 }}>
