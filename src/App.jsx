@@ -1710,9 +1710,10 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
 
     const bucketFiltered = rows.filter(r => {
     if (searchActive) {
-      // When search is active, scope is the whole CRM (every bucket), matched by unit id or owner name
+      // When search is active, scope is the whole CRM (every bucket), matched by unit id or owner name — not affected by any filter, occupancy included
       return r.unit.unitId.toLowerCase().includes(q) || (r.unit.ownerName || "").toLowerCase().includes(q);
     }
+    if (occupancyFilter !== "all" && r.unit.status !== occupancyFilter) return false;
         if (bucketTab === "reject") {
       const inGroup = ["declined", "cold"].includes(r.eff.display);
       if (!inGroup) return false;
@@ -1724,7 +1725,7 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
       return channelSubTab ? r.eff.display === channelSubTab : true;
     }
     return r.eff.display === bucketTab;
-  }).filter(r => occupancyFilter === "all" || r.unit.status === occupancyFilter);
+  });
 
   const sorted = [...bucketFiltered].sort((a, b) => {
     if (sortMode === "unitAsc") return compareUnitId(a.unit.unitId, b.unit.unitId);
