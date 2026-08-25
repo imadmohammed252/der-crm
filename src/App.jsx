@@ -1674,6 +1674,11 @@ const SORT_OPTIONS = [
   ["easy", "Easy to Rent"],
   ["hard", "Hard to Rent"],
 ];
+const OCCUPANCY_OPTIONS = [
+  ["all", "All"],
+  ["vacant", "Vacant"],
+  ["occupied", "Occupied"],
+];
 
 function compareUnitId(a, b) {
   const na = parseFloat(a), nb = parseFloat(b);
@@ -1683,6 +1688,7 @@ function compareUnitId(a, b) {
 
 function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setActiveUnitKey, onMoveToQueue }) {
   const [sortMode, setSortMode] = useState("easy");
+  const [occupancyFilter, setOccupancyFilter] = useState("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1718,7 +1724,7 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
       return channelSubTab ? r.eff.display === channelSubTab : true;
     }
     return r.eff.display === bucketTab;
-  });
+  }).filter(r => occupancyFilter === "all" || r.unit.status === occupancyFilter);
 
   const sorted = [...bucketFiltered].sort((a, b) => {
     if (sortMode === "unitAsc") return compareUnitId(a.unit.unitId, b.unit.unitId);
@@ -1790,7 +1796,7 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
             }}>
             <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <span className="eyebrow">Filter</span>
-              <span style={{ color: "var(--accent)", fontSize: 12 }}>{activeSortLabel}</span>
+              <span style={{ color: "var(--accent)", fontSize: 12 }}>{activeSortLabel}{occupancyFilter !== "all" ? ` · ${OCCUPANCY_OPTIONS.find(([id]) => id === occupancyFilter)[1]}` : ""}</span>
             </span>
             <ChevronRight size={14} style={{ transform: filterOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s", color: "var(--text-faint)" }} />
           </button>
@@ -1830,6 +1836,20 @@ function QueuePane({ bucketTab, setBucketTab, units, crmMap, activeUnitKey, setA
                 }}>
                 {label}
                 {sortMode === id && <Check size={13} color="var(--accent)" />}
+              </button>
+            ))}
+            <div className="eyebrow" style={{ marginTop: 8, marginBottom: 2, color: "var(--text-faint)" }}>Occupancy</div>
+            {OCCUPANCY_OPTIONS.map(([id, label]) => (
+              <button key={id} onClick={() => setOccupancyFilter(id)} className="tap"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "9px 11px", borderRadius: 6, fontSize: 12.5, textAlign: "left",
+                  background: occupancyFilter === id ? "var(--accent-dim)" : "var(--panel-2)",
+                  border: occupancyFilter === id ? "1px solid var(--accent)" : "1px solid var(--line)",
+                  color: "var(--text)"
+                }}>
+                {label}
+                {occupancyFilter === id && <Check size={13} color="var(--accent)" />}
               </button>
             ))}
           </div>
