@@ -16,9 +16,9 @@ const CSS = `
 .pd-root{ font-family:'Inter',sans-serif; background:var(--pd-cream); color:var(--pd-ink); -webkit-font-smoothing:antialiased; }
 .pd-root h1, .pd-root h2, .pd-root h3, .pd-root .serif{ font-family:'Fraunces',serif; }
 
-.pd-root #app{ display:flex; min-height:100vh; }
+.pd-root #app{ display:flex; }
 
-.pd-root #sidebar{ width:272px; flex:0 0 272px; background:linear-gradient(180deg,var(--pd-navy) 0%, var(--pd-navy-2) 100%); color:var(--pd-cream); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto; }
+.pd-root #sidebar{ width:272px; flex:0 0 272px; background:linear-gradient(180deg,var(--pd-navy) 0%, var(--pd-navy-2) 100%); color:var(--pd-cream); display:flex; flex-direction:column; }
 .pd-root #brand{ padding:26px 22px 18px 22px; border-bottom:1px solid rgba(255,255,255,0.1); }
 .pd-root #brand .mark{ font-size:26px; letter-spacing:0.5px; font-weight:500; }
 .pd-root #brand .sub{ font-size:11px; letter-spacing:1.5px; color:var(--pd-gold-2); margin-top:4px; text-transform:uppercase; }

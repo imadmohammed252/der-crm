@@ -1668,7 +1668,9 @@ function UserApp({ state, setState, user, onLogout, saving }) {
               ) : rightPanel === "explorer" ? (
                 <BuildingExplorer state={state} user={user} role="agent" />
               ) : (
-                <PortfolioDashboard state={portfolioState} />
+                <div style={{ flex: 1, overflow: "auto" }}>
+                  <PortfolioDashboard state={portfolioState} />
+                </div>
               )}
             </div>
           </div>
