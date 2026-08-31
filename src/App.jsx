@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import PortfolioDashboard from "./PortfolioDashboard.jsx";
 import {
     Building2, Search, Upload, LogOut, ArrowRightLeft, Phone,
   PhoneMissed, PhoneOff, Check, X, Clock, ChevronRight, RefreshCcw,
@@ -609,7 +610,7 @@ function AdminApp({ state, setState, onLogout, saving }) {
         </div>
       )}
       <div style={{ display: "flex", borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
-{[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"], ["tracking", "Tracking"], ["explorer", "Explorer"]].map(([id, label]) => (          <button key={id} onClick={() => setTab(id)} className="tap"
+{[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"], ["tracking", "Tracking"], ["explorer", "Explorer"], ["portfolio", "Portfolio Desk"]].map(([id, label]) => (          <button key={id} onClick={() => setTab(id)} className="tap"
             style={{
               padding: "13px 18px", background: "transparent", border: "none",
               borderBottom: tab === id ? "1px solid var(--accent)" : "1px solid transparent",
@@ -624,6 +625,7 @@ function AdminApp({ state, setState, onLogout, saving }) {
         {tab === "users" && <UsersPanel state={state} setState={setState} />}
         {tab === "tracking" && <TrackingPanel state={state} />}
         {tab === "explorer" && <BuildingExplorer state={state} role="admin" />}
+        {tab === "portfolio" && <PortfolioDashboard state={state} />}
       </div>
     </>
   );
