@@ -187,6 +187,31 @@ function computeDemand(unit, buildingUnits) {
   return Math.round(clamp(50 + diff * 100, 0, 100));
 }
 
+// Real-dollar market comps for a single unit, same math the Portfolio Desk
+// dashboard uses: median/low/high current rent among OCCUPIED units of the
+// same type in the same building, plus gross yield off purchase price.
+// `comparableUnits` should already be scoped to whatever this unit is
+// (building, or building+access) — this function doesn't re-scope.
+function computeMarketComps(unit, comparableUnits) {
+  const rents = (comparableUnits || [])
+    .filter(u => u.key !== unit.key && u.unitType === unit.unitType && String(u.status).toLowerCase() === "occupied" && Number(u.currentRent) > 0)
+    .map(u => Number(u.currentRent))
+    .sort((a, b) => a - b);
+  const currentRent = Number(unit.currentRent) || null;
+  const purchasePrice = Number(unit.purchasePrice) || null;
+  const yieldPct = currentRent && purchasePrice ? Math.round((currentRent / purchasePrice) * 10000) / 100 : null;
+  if (!rents.length) {
+    return { comp_n: 0, comp_low: null, comp_median: null, comp_high: null, gap_pct: null, yield_pct: yieldPct };
+  }
+  const mid = Math.floor(rents.length / 2);
+  const median = rents.length % 2 ? rents[mid] : (rents[mid - 1] + rents[mid]) / 2;
+  const gapPct = currentRent ? Math.round(((currentRent - median) / median) * 1000) / 10 : null;
+  return {
+    comp_n: rents.length, comp_low: rents[0], comp_median: Math.round(median), comp_high: rents[rents.length - 1],
+    gap_pct: gapPct, yield_pct: yieldPct,
+  };
+}
+
 /* ---------------------------------------------------------
    CRM bucket logic
 --------------------------------------------------------- */
@@ -1989,6 +2014,7 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
   }
   const volatility = computeVolatility(unit);
   const demand = computeDemand(unit, buildingUnits);
+  const comps = computeMarketComps(unit, buildingUnits);
 
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
@@ -2039,7 +2065,15 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
         <Field label="Current Lease End" value={unit.currentLeaseEnd ? fmtDate(unit.currentLeaseEnd) : ""} />
         <Field label="Purchase Price" value={unit.purchasePrice ? `AED ${Number(unit.purchasePrice).toLocaleString()}` : ""} />
         <Field label="Ownership Since" value={unit.ownershipStart ? fmtDate(unit.ownershipStart) : ""} />
-        <Field label="Current Market Price" value={unit.marketPrice ? `AED ${Number(unit.marketPrice).toLocaleString()}` : ""} />
+        <Field label="Market Rent (comps)" value={comps.comp_median ? (
+          <>AED {comps.comp_median.toLocaleString()} <span style={{ fontSize: 11, color: "var(--text-faint)" }}>· {comps.comp_n} comp{comps.comp_n === 1 ? "" : "s"}</span></>
+        ) : ""} emptyText="No comps in building yet" />
+        <Field label="Rent vs Market" value={comps.gap_pct !== null ? (
+          <span style={{ color: comps.gap_pct > 0 ? "var(--green)" : comps.gap_pct < 0 ? "var(--red)" : "var(--text)" }}>
+            {comps.gap_pct > 0 ? "+" : ""}{comps.gap_pct}%
+          </span>
+        ) : ""} emptyText="No comps yet" />
+        <Field label="Gross Yield" value={comps.yield_pct ? `${comps.yield_pct}%` : ""} emptyText="Needs rent & price" />
         <Field label="Email" value={unit.email} emptyText="No email" />
       </div>
 
@@ -2163,6 +2197,7 @@ function LookupTool({ myUnits }) {
           {results.map(u => {
             const isRented = u.status === "occupied";
             const isVacant = u.status === "vacant";
+            const comps = computeMarketComps(u, myUnits.filter(x => x.buildingId === u.buildingId));
             return (
               <div key={u.key} style={{
                 background: "var(--panel)", border: `1px solid ${isRented ? "var(--red)" : "var(--line)"}`,
@@ -2187,7 +2222,8 @@ function LookupTool({ myUnits }) {
                   <Field label="Bedrooms" value={u.bedrooms} />
                   <Field label="Built-up Area" value={u.carpetArea ? `${u.carpetArea} sqft` : ""} />
                  <Field label="Current Rent" value={u.currentRent ? `AED ${Number(u.currentRent).toLocaleString()}` : ""} />
-                  <Field label="Current Market Price" value={u.marketPrice ? `AED ${Number(u.marketPrice).toLocaleString()}` : ""} />
+                  <Field label="Market Rent (comps)" value={comps.comp_median ? `AED ${comps.comp_median.toLocaleString()}` : ""} emptyText="No comps yet" />
+                  <Field label="Gross Yield" value={comps.yield_pct ? `${comps.yield_pct}%` : ""} emptyText="Needs rent & price" />
                 </div>
                 <div style={{ fontSize: 10.5, color: "var(--text-faint)", marginTop: 10 }}>Reference only. Outcomes can't be logged from lookup. Open the CRM queue to call this unit.</div>
               </div>
@@ -2454,7 +2490,9 @@ function BuildingExplorer({ state, user, role }) {
           </div>
         </div>
 
-        {modalUnit && (
+        {modalUnit && (() => {
+          const modalComps = computeMarketComps(modalUnit, unitsInBuilding);
+          return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setModalUnit(null)}>
             <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, maxWidth: 420, width: "100%", padding: "26px 26px 22px", position: "relative" }} onClick={e => e.stopPropagation()}>
               <button onClick={() => setModalUnit(null)} className="tap" style={{ position: "absolute", top: 14, right: 16, background: "none", border: "none", color: "var(--text-dim)", fontSize: 20, cursor: "pointer" }}>&times;</button>
@@ -2470,11 +2508,13 @@ function BuildingExplorer({ state, user, role }) {
                 <Field label="Owner" value={modalUnit.ownerName} />
                 <Field label="Contact" value={modalUnit.ownerContact} />
                 <Field label="Current Rent" value={modalUnit.currentRent ? `AED ${Number(modalUnit.currentRent).toLocaleString()}` : ""} />
-                <Field label="Current Market Price" value={modalUnit.marketPrice ? `AED ${Number(modalUnit.marketPrice).toLocaleString()}` : ""} />
+                <Field label="Market Rent (comps)" value={modalComps.comp_median ? `AED ${modalComps.comp_median.toLocaleString()}` : ""} emptyText="No comps yet" />
+                <Field label="Gross Yield" value={modalComps.yield_pct ? `${modalComps.yield_pct}%` : ""} emptyText="Needs rent & price" />
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
