@@ -1551,6 +1551,23 @@ function UserApp({ state, setState, user, onLogout, saving }) {
   const activeUnit = state.units[activeUnitKey] || null;
   const activeUnitBuildingUnits = activeUnit ? Object.values(state.units).filter(u => u.buildingId === activeUnit.buildingId) : [];
 
+  // Portfolio Desk, scoped the same way the Explorer tab is: full access to
+  // buildings assigned at the building level, unit-level-only access when
+  // this agent only has specific units overridden to them.
+  const portfolioAccess = useMemo(() => buildingExplorerAccess(state, user, "agent"), [state.buildings, state.units, state.assignments, user]);
+  const portfolioState = useMemo(() => {
+    const buildings = {};
+    const units = {};
+    portfolioAccess.forEach(a => { buildings[a.id] = state.buildings[a.id]; });
+    Object.entries(state.units).forEach(([k, u]) => {
+      const acc = portfolioAccess.find(a => a.id === u.buildingId);
+      if (!acc) return;
+      if (acc.restricted && !acc.allowedKeys.has(u.key)) return;
+      units[k] = u;
+    });
+    return { buildings, units };
+  }, [portfolioAccess, state.buildings, state.units]);
+
   const updateCrm = (key, nextCrmPartial) => {
     const crm = { ...(state.crm[key] || defaultCrm()), ...nextCrmPartial };
     setState({ ...state, crm: { ...state.crm, [key]: crm } });
@@ -1626,7 +1643,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
           />
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ display: "flex", borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
-{[["detail", "Call Detail"], ["lookup", "Lookup"], ["explorer", "Explorer"]].map(([id, label]) => (                <button key={id} onClick={() => setRightPanel(id)} className="tap"
+{[["detail", "Call Detail"], ["lookup", "Lookup"], ["explorer", "Explorer"], ["portfolio", "Portfolio Desk"]].map(([id, label]) => (                <button key={id} onClick={() => setRightPanel(id)} className="tap"
                   style={{
                     padding: "11px 16px", background: "transparent", border: "none",
                     borderBottom: rightPanel === id ? "1px solid var(--accent)" : "1px solid transparent",
@@ -1634,7 +1651,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
                     textTransform: "uppercase", letterSpacing: "0.12em",
                     display: "flex", alignItems: "center", gap: 6
                   }}>
-{id === "lookup" && <Search size={13} />} {id === "explorer" && <LayoutGrid size={13} />} {label}                </button>
+{id === "lookup" && <Search size={13} />} {id === "explorer" && <LayoutGrid size={13} />} {id === "portfolio" && <Building2 size={13} />} {label}                </button>
               ))}
             </div>
             <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
@@ -1648,8 +1665,10 @@ function UserApp({ state, setState, user, onLogout, saving }) {
                 />
               ) : rightPanel === "lookup" ? (
                 <LookupTool state={state} myUnits={myUnits} />
-              ) : (
+              ) : rightPanel === "explorer" ? (
                 <BuildingExplorer state={state} user={user} role="agent" />
+              ) : (
+                <PortfolioDashboard state={portfolioState} />
               )}
             </div>
           </div>
