@@ -193,6 +193,26 @@ function computeDemand(unit, buildingUnits) {
 // same type in the same building, plus gross yield off purchase price.
 // `comparableUnits` should already be scoped to whatever this unit is
 // (building, or building+access) — this function doesn't re-scope.
+// The three contact columns (owner/secondary/additional) are independently
+// mapped on import, so nothing stops two of them landing on the same source
+// column — e.g. an admin picking the same "phone" column for both Secondary
+// and Additional Contact. Rather than trusting each slot to hold a distinct
+// number, just collect whatever's actually on file and drop exact repeats,
+// so a duplicated mapping never shows the same number twice.
+function contactNumbers(unit) {
+  const seen = new Set();
+  const out = [];
+  [unit.ownerContact, unit.secondaryContact, unit.additionalContact].forEach(v => {
+    const val = (v || "").trim();
+    if (!val) return;
+    const norm = val.replace(/\s+/g, "").toLowerCase();
+    if (seen.has(norm)) return;
+    seen.add(norm);
+    out.push(val);
+  });
+  return out;
+}
+
 function computeMarketComps(unit, comparableUnits) {
   const rents = (comparableUnits || [])
     .filter(u => u.key !== unit.key && u.unitType === unit.unitType && String(u.status).toLowerCase() === "occupied" && Number(u.currentRent) > 0)
@@ -2088,17 +2108,11 @@ function DetailPane({ unit, crm, buildingUnits, buildingName, onNotes, onOutcome
             <div className="disp" style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.05 }}>
               {unit.ownerName || "Owner not available"}
             </div>
-            <div className="mono" style={{ fontSize: 13, color: unit.ownerContact ? "var(--accent)" : "var(--text-faint)", marginTop: 7 }}>
-              {unit.ownerContact || "No contact on file"}
-            </div>
-            <div className="mono" style={{ fontSize: 12, color: unit.secondaryContact ? "var(--text-dim)" : "var(--text-faint)", marginTop: 3 }}>
-              {unit.secondaryContact || "No secondary number"}
-            </div>
-            {unit.additionalContact && (
-              <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3 }}>
-                {unit.additionalContact}
+            {contactNumbers(unit).map((c, i) => (
+              <div key={i} className="mono" style={{ fontSize: i === 0 ? 13 : 12, color: i === 0 ? "var(--accent)" : "var(--text-dim)", marginTop: i === 0 ? 7 : 3 }}>
+                {c}
               </div>
-            )}
+            ))}
           </div>
           <div className="eyebrow" style={{ color: "var(--accent)", whiteSpace: "nowrap", paddingTop: 2 }}>Calling now</div>
         </div>
@@ -2320,6 +2334,7 @@ function LookupTool({ myUnits }) {
             const isRented = u.status === "occupied";
             const isVacant = u.status === "vacant";
             const comps = computeMarketComps(u, myUnits.filter(x => x.buildingId === u.buildingId));
+            const contacts = contactNumbers(u);
             return (
               <div key={u.key} style={{
                 background: "var(--panel)", border: `1px solid ${isRented ? "var(--red)" : "var(--line)"}`,
@@ -2337,8 +2352,7 @@ function LookupTool({ myUnits }) {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
                   <Field label="Owner" value={u.ownerName} />
-                  <Field label="Contact" value={u.ownerContact} />
-                  <Field label="Secondary Number" value={u.secondaryContact} emptyText="No secondary number" />
+                  {contacts.length > 0 && <Field label="Contact" value={contacts.join(" · ")} />}
                   <Field label="Email" value={u.email} emptyText="No email" />
                   <Field label="Unit Type" value={u.unitType} />
                   <Field label="Bedrooms" value={u.bedrooms} />
@@ -2614,6 +2628,7 @@ function BuildingExplorer({ state, user, role }) {
 
         {modalUnit && (() => {
           const modalComps = computeMarketComps(modalUnit, unitsInBuilding);
+          const modalContacts = contactNumbers(modalUnit);
           return (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={() => setModalUnit(null)}>
             <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, maxWidth: 420, width: "100%", padding: "26px 26px 22px", position: "relative" }} onClick={e => e.stopPropagation()}>
@@ -2628,7 +2643,7 @@ function BuildingExplorer({ state, user, role }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
                 <Field label="Unit Type" value={modalUnit.unitType} />
                 <Field label="Owner" value={modalUnit.ownerName} />
-                <Field label="Contact" value={modalUnit.ownerContact} />
+                {modalContacts.length > 0 && <Field label="Contact" value={modalContacts.join(" · ")} />}
                 <Field label="Current Rent" value={modalUnit.currentRent ? `AED ${Number(modalUnit.currentRent).toLocaleString()}` : ""} />
                 <Field label="Market Rent (comps)" value={modalComps.comp_median ? `AED ${modalComps.comp_median.toLocaleString()}` : ""} emptyText="No comps yet" />
                 <Field label="Gross Yield" value={modalComps.yield_pct ? `${modalComps.yield_pct}%` : ""} emptyText="Needs rent & price" />
