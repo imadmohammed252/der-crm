@@ -19,10 +19,7 @@ const CSS = `
 .pd-root #app{ display:flex; }
 
 .pd-root #sidebar{ width:272px; flex:0 0 272px; background:linear-gradient(180deg,var(--pd-navy) 0%, var(--pd-navy-2) 100%); color:var(--pd-cream); display:flex; flex-direction:column; }
-.pd-root #brand{ padding:26px 22px 18px 22px; border-bottom:1px solid rgba(255,255,255,0.1); }
-.pd-root #brand .mark{ font-size:26px; letter-spacing:0.5px; font-weight:500; }
-.pd-root #brand .sub{ font-size:11px; letter-spacing:1.5px; color:var(--pd-gold-2); margin-top:4px; text-transform:uppercase; }
-.pd-root #tower-nav{ padding:14px 10px 26px 10px; flex:1; }
+.pd-root #tower-nav{ padding:22px 10px 26px 10px; flex:1; }
 .pd-root .nav-group-label{ font-size:10.5px; letter-spacing:1.3px; text-transform:uppercase; color:rgba(246,243,236,0.45); padding:14px 12px 6px 12px; }
 .pd-root .tower-item{ display:flex; align-items:center; justify-content:space-between; padding:9px 12px; margin:1px 4px; border-radius:8px; cursor:pointer; font-size:13.5px; color:rgba(246,243,236,0.88); transition:background .15s ease; }
 .pd-root .tower-item:hover{ background:rgba(255,255,255,0.06); }
@@ -61,8 +58,8 @@ const CSS = `
 .pd-root .chip-select{ font-size:12.5px; padding:7px 10px; border-radius:8px; border:1px solid var(--pd-line); background:var(--pd-white); color:var(--pd-ink); font-family:'Inter',sans-serif; }
 .pd-root .clear-link{ font-size:12px; color:var(--pd-gold); cursor:pointer; text-decoration:underline; margin-left:4px; }
 
-.pd-root #table-wrap{ background:var(--pd-white); border:1px solid var(--pd-line); border-radius:12px; overflow:hidden; box-shadow:var(--pd-shadow); }
-.pd-root table{ width:100%; border-collapse:collapse; font-size:12.8px; }
+.pd-root #table-wrap{ background:var(--pd-white); border:1px solid var(--pd-line); border-radius:12px; overflow-x:auto; overflow-y:hidden; box-shadow:var(--pd-shadow); -webkit-overflow-scrolling:touch; }
+.pd-root table{ width:100%; min-width:880px; border-collapse:collapse; font-size:12.8px; }
 .pd-root thead th{ text-align:left; padding:11px 12px; background:var(--pd-cream-2); color:var(--pd-navy); font-weight:600; font-size:11.3px; text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid var(--pd-line); cursor:pointer; white-space:nowrap; user-select:none; }
 .pd-root thead th:hover{ color:var(--pd-gold); }
 .pd-root tbody td{ padding:10px 12px; border-bottom:1px solid var(--pd-line); color:var(--pd-ink); white-space:nowrap; }
@@ -409,10 +406,6 @@ export default function PortfolioDashboard({ state }) {
       <style>{CSS}</style>
       <div id="app">
         <aside id="sidebar" className={sidebarOpen ? "open" : ""}>
-          <div id="brand">
-            <div className="mark">portfolio <span style={{ color: "var(--pd-gold-2)", fontWeight: 400 }}>desk</span></div>
-            <div className="sub">{buildingNames.length} building{buildingNames.length === 1 ? "" : "s"} on file</div>
-          </div>
           <div id="tower-nav">
             <div className={"all-item" + (tower === null ? " active" : "")} onClick={() => setTower(null)}>
               <span>All buildings</span><span className="cnt">{rows.length}</span>

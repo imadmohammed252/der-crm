@@ -212,6 +212,40 @@ function computeMarketComps(unit, comparableUnits) {
   };
 }
 
+// Same three message templates as the Portfolio Desk dashboard, adapted to
+// the raw unit shape the CRM's own components already work with.
+function buildUnitBlurb(mode, unit, buildingName, comps) {
+  const label = buildingName ? `${buildingName} — Unit ${unit.unitId}` : `Unit ${unit.unitId}`;
+  const rentLine = unit.status === "occupied"
+    ? `Currently leased at AED ${Number(unit.currentRent).toLocaleString()}/yr, ending ${unit.currentLeaseEnd ? fmtDate(unit.currentLeaseEnd) : "TBC"}.`
+    : `Currently vacant — ready to let.`;
+  const suggestLine = comps.comp_median
+    ? `Market comps for this type/building are running AED ${comps.comp_low.toLocaleString()}–AED ${comps.comp_high.toLocaleString()}, median AED ${comps.comp_median.toLocaleString()}, based on ${comps.comp_n} comparable unit${comps.comp_n === 1 ? "" : "s"}.`
+    : "";
+  const yieldLine = comps.yield_pct ? `Estimated gross yield: ${comps.yield_pct}%.` : "";
+  const sqft = unit.carpetArea ? Number(unit.carpetArea).toLocaleString() : "—";
+
+  if (mode === "whatsapp") {
+    return `*${label}*\n` +
+      `Type ${unit.unitType || "—"} · ${unit.bedrooms || "—"} bed · ${sqft} sqft · Floor ${unit.floor || "—"}\n\n` +
+      `${rentLine}\n${suggestLine}\n${yieldLine}\n\n` +
+      `Happy to arrange a viewing or send more details — let me know a good time.`;
+  }
+  if (mode === "email") {
+    return `Subject: ${label}\n\n` +
+      `Hi,\n\nSharing the details for Unit ${unit.unitId}${buildingName ? ` at ${buildingName}` : ""}:\n\n` +
+      `- Type: ${unit.unitType || "—"}\n- Size: ${sqft} sqft, ${unit.bedrooms || "—"} bedroom(s), Floor ${unit.floor || "—"}\n` +
+      `- Status: ${unit.status === "occupied" ? "Occupied" : "Vacant"}\n- ${rentLine}\n- ${suggestLine}\n- ${yieldLine}\n\n` +
+      `Happy to arrange a viewing at your convenience.\n\nBest regards,`;
+  }
+  return `Call talking points — ${label}\n\n` +
+    `• Type ${unit.unitType || "—"}, ${unit.bedrooms || "—"} bed, ${sqft} sqft, floor ${unit.floor || "—"}\n` +
+    `• ${rentLine}\n` +
+    `• ${suggestLine}\n` +
+    `• ${yieldLine}\n` +
+    `• Close: offer a viewing slot this week, confirm move-in timeline.`;
+}
+
 /* ---------------------------------------------------------
    CRM bucket logic
 --------------------------------------------------------- */
@@ -1684,6 +1718,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
                 <DetailPane
                   unit={activeUnit} crm={activeUnit ? (state.crm[activeUnit.key] || defaultCrm()) : null}
                   buildingUnits={activeUnitBuildingUnits}
+                  buildingName={activeUnit ? state.buildings[activeUnit.buildingId]?.name : null}
                   onNotes={(notes) => activeUnit && updateCrm(activeUnit.key, { notes })}
                   onOutcome={(outcome) => activeUnit && logOutcome(activeUnit.key, outcome)}
                   onMoveToQueue={() => activeUnit && moveToQueue(activeUnit.key)}
@@ -2003,8 +2038,29 @@ function Field({ label, value, emptyText }) {
   );
 }
 
-function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueue }) {
+function DetailPane({ unit, crm, buildingUnits, buildingName, onNotes, onOutcome, onMoveToQueue }) {
   const [confirmingMove, setConfirmingMove] = useState(false);
+  const [msgMode, setMsgMode] = useState("whatsapp");
+  const [blurb, setBlurb] = useState("");
+  const [copied, setCopied] = useState(false);
+  const copiedTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    setMsgMode("whatsapp");
+  }, [unit?.key]);
+
+  useEffect(() => {
+    if (unit) setBlurb(buildUnitBlurb(msgMode, unit, buildingName, computeMarketComps(unit, buildingUnits)));
+  }, [unit, buildingName, buildingUnits, msgMode]);
+
+  const copyBlurb = () => {
+    navigator.clipboard.writeText(blurb).then(() => {
+      setCopied(true);
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current);
+      copiedTimeoutRef.current = setTimeout(() => setCopied(false), 1600);
+    }).catch(() => {});
+  };
+
   if (!unit) {
     return (
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontSize: 13.5 }}>
@@ -2077,6 +2133,37 @@ function DetailPane({ unit, crm, buildingUnits, onNotes, onOutcome, onMoveToQueu
         <Field label="Email" value={unit.email} emptyText="No email" />
       </div>
 
+      {/* Market position — rent range slider against same-type comps in this building */}
+      <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 16 }}>
+        <div className="eyebrow" style={{ marginBottom: 4 }}>Market Position</div>
+        <div style={{ fontSize: 11.5, color: "var(--text-faint)", marginBottom: 10 }}>
+          Based on {comps.comp_n} comparable unit{comps.comp_n === 1 ? "" : "s"} · Type {unit.unitType || "—"}
+        </div>
+        <RentBar comps={comps} currentRent={unit.currentRent} />
+      </div>
+
+      {/* Send to client — message generator */}
+      <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: 16 }}>
+        <div className="eyebrow" style={{ marginBottom: 12 }}>Send to Client</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          {["whatsapp", "email", "call"].map(m => (
+            <button key={m} onClick={() => setMsgMode(m)} className="tap"
+              style={{ padding: "6px 12px", borderRadius: 5, fontSize: 11, cursor: "pointer", background: msgMode === m ? "var(--accent)" : "var(--panel-2)", color: msgMode === m ? "#fff" : "var(--text-dim)", border: "none", fontWeight: msgMode === m ? 600 : 400 }}>
+              {m === "whatsapp" ? "WhatsApp" : m === "email" ? "Email" : "Call script"}
+            </button>
+          ))}
+        </div>
+        <textarea value={blurb} onChange={e => setBlurb(e.target.value)}
+          style={{ width: "100%", minHeight: 130, background: "var(--panel-2)", border: "1px solid var(--line)", borderRadius: 6, padding: 12, color: "var(--text)", fontSize: 12.8, resize: "vertical" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+          <button onClick={copyBlurb} className="tap"
+            style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "9px 15px", borderRadius: 5, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Copy to clipboard
+          </button>
+          <span style={{ fontSize: 11.5, color: "var(--green)", opacity: copied ? 1 : 0, transition: "opacity 0.2s" }}>Copied ✓</span>
+        </div>
+      </div>
+
       {/* Notes */}
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>NOTES</div>
@@ -2147,6 +2234,33 @@ function ScoreBar({ label, value, colorVar }) {
       </div>
       <div style={{ height: 3, background: "var(--line)", overflow: "hidden" }}>
         <div style={{ width: `${value}%`, height: "100%", background: colorVar, transition: "width 0.3s" }} />
+      </div>
+    </div>
+  );
+}
+
+// Same low/median/high comp-range slider as the Portfolio Desk dashboard,
+// restyled for the CRM's own dark theme instead of copying its cream/gold one.
+function RentBar({ comps, currentRent }) {
+  if (!comps.comp_low || !comps.comp_high || comps.comp_low === comps.comp_high) {
+    return <div style={{ fontSize: 12, color: "var(--text-faint)" }}>Not enough comparable data to plot a range.</div>;
+  }
+  const lo = comps.comp_low, hi = comps.comp_high, span = hi - lo;
+  const medPos = ((comps.comp_median - lo) / span * 100).toFixed(1);
+  let curPos = null;
+  const cur = Number(currentRent);
+  if (cur) curPos = Math.max(0, Math.min(100, (cur - lo) / span * 100));
+  return (
+    <div>
+      <div style={{ height: 10, background: "var(--panel-2)", borderRadius: 6, position: "relative" }}>
+        <div style={{ position: "absolute", inset: 0, borderRadius: 6, background: "var(--line)", opacity: 0.45 }} />
+        <div style={{ position: "absolute", top: -4, left: `${medPos}%`, width: 2, height: 18, background: "var(--text-dim)" }} title="Median" />
+        {curPos !== null && <div style={{ position: "absolute", top: -4, left: `${curPos}%`, width: 2, height: 18, background: "var(--accent)" }} title="Current rent" />}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-dim)", marginTop: 6 }}>
+        <span>AED {lo.toLocaleString()}</span>
+        <span>median AED {comps.comp_median.toLocaleString()}</span>
+        <span>AED {hi.toLocaleString()}</span>
       </div>
     </div>
   );
