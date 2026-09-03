@@ -96,6 +96,7 @@ const CANDIDATES = {
   ownerName: ["owner name", "owner", "name"],
   ownerContact: ["owner contact", "contact", "phone", "owner phone", "mobile"],
   secondaryContact: ["secondary contact", "secondary number", "secondary phone", "alternate number", "alternate contact", "second phone"],
+  additionalContact: ["additional contact", "additional number", "additional phone", "third contact", "third number", "other contact", "other number"],
   email: ["email", "email address", "owner email", "e-mail"],
   ownershipStart: ["ownership start", "ownership start date", "purchase date", "acquired"],
   purchasePrice: ["purchase price", "price", "purchase amount"],
@@ -1132,6 +1133,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         ownerName: getMapped(r, ownerMap, "ownerName"),
         ownerContact: getMapped(r, ownerMap, "ownerContact"),
         secondaryContact: getMapped(r, ownerMap, "secondaryContact"),
+        additionalContact: getMapped(r, ownerMap, "additionalContact"),
         email: getMapped(r, ownerMap, "email"),
       };
       if (unitIdSet.has(nid)) ownerMatched++;
@@ -1162,6 +1164,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         ownerName: owner.ownerName || existing.ownerName || "",
         ownerContact: owner.ownerContact || existing.ownerContact || "",
         secondaryContact: owner.secondaryContact || existing.secondaryContact || "",
+        additionalContact: owner.additionalContact || existing.additionalContact || "",
         email: owner.email || existing.email || "",
         ownershipStart: pick(getMapped(r, unitMap, "ownershipStart"), "ownershipStart") || existing.ownershipStart || "",
         purchasePrice: pick(getMapped(r, unitMap, "purchasePrice"), "purchasePrice") || existing.purchasePrice || "",
@@ -1201,7 +1204,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     bedrooms: "Bedrooms", bathrooms: "Bathrooms", currentRent: "Current Rent",
     currentLeaseStart: "Current Lease Start", currentLeaseEnd: "Current Lease End",
     status: "Status (occupied/vacant)",
-    ownerName: "Owner Name", ownerContact: "Owner Contact", secondaryContact: "Secondary Number", email: "Email", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
+    ownerName: "Owner Name", ownerContact: "Owner Contact", secondaryContact: "Secondary Number", additionalContact: "Additional Contact", email: "Email", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
   };
 
   // Fully automatic by default — the file is read, columns are detected,
@@ -1305,7 +1308,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
         <UploadBlock title="Owner data (optional)" hint="Must also include a Unit ID column so it can join to the unit file."
           file={ownerFile} setter={setOwnerFile} headers={ownerHeaders} setHeaders={setOwnerHeaders}
-          fieldList={["unitId", "ownerName", "ownerContact", "secondaryContact", "email"]}
+          fieldList={["unitId", "ownerName", "ownerContact", "secondaryContact", "additionalContact", "email"]}
           map={ownerMap} setMap={setOwnerMap} />
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, flexWrap: "wrap", gap: 10 }}>
@@ -2091,6 +2094,11 @@ function DetailPane({ unit, crm, buildingUnits, buildingName, onNotes, onOutcome
             <div className="mono" style={{ fontSize: 12, color: unit.secondaryContact ? "var(--text-dim)" : "var(--text-faint)", marginTop: 3 }}>
               {unit.secondaryContact || "No secondary number"}
             </div>
+            {unit.additionalContact && (
+              <div className="mono" style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3 }}>
+                {unit.additionalContact}
+              </div>
+            )}
           </div>
           <div className="eyebrow" style={{ color: "var(--accent)", whiteSpace: "nowrap", paddingTop: 2 }}>Calling now</div>
         </div>
