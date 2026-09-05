@@ -96,7 +96,6 @@ const CANDIDATES = {
   ownerName: ["owner name", "owner", "name"],
   ownerContact: ["owner contact", "contact", "phone", "owner phone"],
   secondaryContact: ["secondary contact", "secondary number", "secondary phone", "alternate number", "alternate contact", "second phone"],
-  additionalContact: ["additional contact", "additional number", "additional phone", "third contact", "third number", "other contact", "other number"],
   mobile: ["mobile", "mobile number", "mobile phone", "cell", "cell phone", "cellphone"],
   email: ["email", "email address", "owner email", "e-mail"],
   ownershipStart: ["ownership start", "ownership start date", "purchase date", "acquired"],
@@ -194,16 +193,15 @@ function computeDemand(unit, buildingUnits) {
 // same type in the same building, plus gross yield off purchase price.
 // `comparableUnits` should already be scoped to whatever this unit is
 // (building, or building+access) — this function doesn't re-scope.
-// The three contact columns (owner/secondary/additional) are independently
+// The three contact columns (owner/secondary/mobile) are independently
 // mapped on import, so nothing stops two of them landing on the same source
-// column — e.g. an admin picking the same "phone" column for both Secondary
-// and Additional Contact. Rather than trusting each slot to hold a distinct
-// number, just collect whatever's actually on file and drop exact repeats,
-// so a duplicated mapping never shows the same number twice.
+// column. Rather than trusting each slot to hold a distinct number, just
+// collect whatever's actually on file and drop exact repeats, so a
+// duplicated mapping never shows the same number twice.
 function contactNumbers(unit) {
   const seen = new Set();
   const out = [];
-  [unit.ownerContact, unit.secondaryContact, unit.additionalContact, unit.mobile].forEach(v => {
+  [unit.ownerContact, unit.secondaryContact, unit.mobile].forEach(v => {
     const val = (v || "").trim();
     if (!val) return;
     const norm = val.replace(/\s+/g, "").toLowerCase();
@@ -1154,7 +1152,6 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         ownerName: getMapped(r, ownerMap, "ownerName"),
         ownerContact: getMapped(r, ownerMap, "ownerContact"),
         secondaryContact: getMapped(r, ownerMap, "secondaryContact"),
-        additionalContact: getMapped(r, ownerMap, "additionalContact"),
         mobile: getMapped(r, ownerMap, "mobile"),
         email: getMapped(r, ownerMap, "email"),
       };
@@ -1186,7 +1183,6 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
         ownerName: owner.ownerName || existing.ownerName || "",
         ownerContact: owner.ownerContact || existing.ownerContact || "",
         secondaryContact: owner.secondaryContact || existing.secondaryContact || "",
-        additionalContact: owner.additionalContact || existing.additionalContact || "",
         mobile: owner.mobile || existing.mobile || "",
         email: owner.email || existing.email || "",
         ownershipStart: pick(getMapped(r, unitMap, "ownershipStart"), "ownershipStart") || existing.ownershipStart || "",
@@ -1227,7 +1223,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     bedrooms: "Bedrooms", bathrooms: "Bathrooms", currentRent: "Current Rent",
     currentLeaseStart: "Current Lease Start", currentLeaseEnd: "Current Lease End",
     status: "Status (occupied/vacant)",
-    ownerName: "Owner Name", ownerContact: "Owner Contact", secondaryContact: "Secondary Number", additionalContact: "Additional Contact", mobile: "Mobile", email: "Email", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
+    ownerName: "Owner Name", ownerContact: "Owner Contact", secondaryContact: "Secondary Number", mobile: "Mobile", email: "Email", ownershipStart: "Ownership Start", purchasePrice: "Purchase Price",
   };
 
   // Fully automatic by default — the file is read, columns are detected,
@@ -1331,7 +1327,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
 
         <UploadBlock title="Owner data (optional)" hint="Must also include a Unit ID column so it can join to the unit file."
           file={ownerFile} setter={setOwnerFile} headers={ownerHeaders} setHeaders={setOwnerHeaders}
-          fieldList={["unitId", "ownerName", "ownerContact", "secondaryContact", "additionalContact", "mobile", "email"]}
+          fieldList={["unitId", "ownerName", "ownerContact", "secondaryContact", "mobile", "email"]}
           map={ownerMap} setMap={setOwnerMap} />
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 6, flexWrap: "wrap", gap: 10 }}>
