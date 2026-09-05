@@ -1833,7 +1833,15 @@ function UserApp({ state, setState, user, onLogout, saving }) {
     setState({ ...state, crm: { ...state.crm, [key]: crm } });
     saveCrmDebounced(key, crm); // e.g. notes — typed keystroke by keystroke, so debounced
   };
+  // Backstop against duplicate outcome rows beyond the UI-level cooldown in
+  // DetailPane (which handles the common case) — found real data with the
+  // same outcome logged 5x within 6 seconds on one unit, so this guards the
+  // actual write path too rather than trusting the button alone.
+  const lastOutcomeLogRef = useRef({});
   const logOutcome = (key, outcome) => {
+    const now = Date.now();
+    if (now - (lastOutcomeLogRef.current[key] || 0) < 1200) return;
+    lastOutcomeLogRef.current[key] = now;
     const crm = applyOutcome(state.crm[key] || defaultCrm(), outcome);
     const entry = { unit: key, agent: user, outcome, timestamp: new Date().toISOString() };
     setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: [...(state.callLog || []), entry] });
@@ -2251,9 +2259,25 @@ function DetailPane({ unit, crm, buildingUnits, buildingName, onNotes, onOutcome
   const [blurb, setBlurb] = useState("");
   const [copied, setCopied] = useState(false);
   const copiedTimeoutRef = useRef(null);
+  // A rapid double/triple-click (or impatient repeat-tapping because nothing
+  // visibly happened yet) was logging the same outcome multiple times —
+  // found units with "No Answer" logged 5x within 6 seconds in the real
+  // data. Briefly disable the outcome buttons right after a click so extra
+  // clicks in that window are ignored instead of creating extra call_log
+  // rows for the same action.
+  const [outcomeCooldown, setOutcomeCooldown] = useState(false);
+  const outcomeCooldownTimerRef = useRef(null);
+  const handleOutcome = (outcome) => {
+    if (outcomeCooldown) return;
+    setOutcomeCooldown(true);
+    onOutcome(outcome);
+    outcomeCooldownTimerRef.current = setTimeout(() => setOutcomeCooldown(false), 1200);
+  };
 
   useEffect(() => {
     setMsgMode("whatsapp");
+    setOutcomeCooldown(false);
+    clearTimeout(outcomeCooldownTimerRef.current);
   }, [unit?.key]);
 
   useEffect(() => {
@@ -2403,20 +2427,20 @@ function DetailPane({ unit, crm, buildingUnits, buildingName, onNotes, onOutcome
           ))}
                 </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <OutcomeBtn icon={Check} label="Yes" color="var(--green)" onClick={() => onOutcome("yes")} />
-          <OutcomeBtn icon={Clock} label="Call Me Back" color="var(--amber)" onClick={() => onOutcome("callMeBack")} />
-          <OutcomeBtn icon={X} label="No" color="var(--red)" onClick={() => onOutcome("no")} />
+          <OutcomeBtn icon={Check} label="Yes" color="var(--green)" onClick={() => handleOutcome("yes")} disabled={outcomeCooldown} />
+          <OutcomeBtn icon={Clock} label="Call Me Back" color="var(--amber)" onClick={() => handleOutcome("callMeBack")} disabled={outcomeCooldown} />
+          <OutcomeBtn icon={X} label="No" color="var(--red)" onClick={() => handleOutcome("no")} disabled={outcomeCooldown} />
           {!["whatsapp", "linkedin", "email"].includes(crm.bucket) && (
-            <OutcomeBtn icon={PhoneMissed} label="No Answer" color="var(--gray)" onClick={() => onOutcome("noAnswer")} />
+            <OutcomeBtn icon={PhoneMissed} label="No Answer" color="var(--gray)" onClick={() => handleOutcome("noAnswer")} disabled={outcomeCooldown} />
           )}
         </div>
         {crm.bucket === "unreachable" && (
           <div style={{ marginTop: 18 }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", marginBottom: 8 }}>FOLLOW UP THROUGH</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <OutcomeBtn icon={MessageCircle} label="WhatsApp" color="var(--green)" onClick={() => onOutcome("whatsapp")} />
-              <OutcomeBtn icon={Mail} label="Email" color="var(--gray)" onClick={() => onOutcome("email")} />
-              <OutcomeBtn icon={Briefcase} label="LinkedIn" color="var(--blue)" onClick={() => onOutcome("linkedin")} />
+              <OutcomeBtn icon={MessageCircle} label="WhatsApp" color="var(--green)" onClick={() => handleOutcome("whatsapp")} disabled={outcomeCooldown} />
+              <OutcomeBtn icon={Mail} label="Email" color="var(--gray)" onClick={() => handleOutcome("email")} disabled={outcomeCooldown} />
+              <OutcomeBtn icon={Briefcase} label="LinkedIn" color="var(--blue)" onClick={() => handleOutcome("linkedin")} disabled={outcomeCooldown} />
             </div>
           </div>
         )}
@@ -2472,12 +2496,13 @@ function RentBar({ comps, currentRent }) {
   );
 }
 
-function OutcomeBtn({ icon: Icon, label, color, onClick }) {
+function OutcomeBtn({ icon: Icon, label, color, onClick, disabled }) {
   return (
-    <button onClick={onClick} className="tap sweep-btn" style={{
+    <button onClick={onClick} disabled={disabled} className="tap sweep-btn" style={{
       display: "flex", alignItems: "center", gap: 7, background: "transparent", border: "1px solid var(--line)",
       color, padding: "11px 14px", borderRadius: 5, fontSize: 10.5, fontWeight: 600,
-      textTransform: "uppercase", letterSpacing: "0.1em", "--sweep-color": color
+      textTransform: "uppercase", letterSpacing: "0.1em", "--sweep-color": color,
+      opacity: disabled ? 0.45 : 1, cursor: disabled ? "default" : "pointer"
     }}>
       <span style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 7 }}>
         <Icon size={14} /> {label}
