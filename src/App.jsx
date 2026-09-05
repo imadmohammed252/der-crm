@@ -351,56 +351,156 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 });
 const STATE_ROW_ID = "singleton";
 
-// The whole app state lives in a single JSONB column of a single row. This is
-// the simplest possible schema that still gives cross-device sync: every save
-// overwrites the blob, every load reads it, and last write wins. That's fine
-// for a 3-person internal tool where only one person is typing at a time; it
-// would be wrong for anything with real concurrency.
+// Buildings/units/assignments/users still live in a single JSONB blob — that
+// data is edited by one admin at a time, infrequently, so whole-document
+// overwrite is an acceptable tradeoff there. It is NOT acceptable for CRM
+// notes/bucket state or the call log, which multiple agents write to
+// continuously and concurrently: two agents calling different units at the
+// same moment would each save a full snapshot of "the world as I last saw
+// it", and whoever's debounced save lands second would silently erase
+// whatever the other just wrote. Those two pieces live in their own tables
+// (crm_state, call_log) with row-level writes instead, so concurrent agents
+// can never clobber each other. The blob also carries a `version` column,
+// checked on every save, so even the low-frequency admin path fails loudly
+// instead of silently overwriting when two saves race.
 async function loadState() {
   try {
-    const { data, error } = await supabase
-      .from("app_state")
-      .select("data")
-      .eq("id", STATE_ROW_ID)
-      .maybeSingle();
-    if (error) throw error;
+    const [blobRes, crmLogRes] = await Promise.all([
+      supabase.from("app_state").select("data, version").eq("id", STATE_ROW_ID).maybeSingle(),
+      fetchCrmAndLog(),
+    ]);
+    if (blobRes.error) throw blobRes.error;
+    const data = blobRes.data;
+    const base = { buildings: {}, units: {}, assignments: {}, users: DEFAULT_USERS };
+    let parsed = base;
+    let version = 1;
     if (data && data.data && Object.keys(data.data).length > 0) {
-      const parsed = data.data;
+      parsed = { ...base, ...data.data };
       if (!parsed.users || Object.keys(parsed.users).length === 0) parsed.users = DEFAULT_USERS;
-      // fill any missing top-level keys so older data doesn't crash newer code
-      return { buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: DEFAULT_USERS, ...parsed };
+      version = data.version || 1;
     }
+    // crm/callLog are no longer read from or written to the blob — they come
+    // exclusively from crm_state/call_log now (see fetchCrmAndLog).
+    delete parsed.crm;
+    delete parsed.callLog;
+    return { ...parsed, ...crmLogRes, version };
   } catch (e) {
     console.error("loadState failed, using empty state:", e);
   }
-  return { buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: DEFAULT_USERS };
+  return { buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: DEFAULT_USERS, version: 1 };
 }
 
+// Only the blob fields — crm/callLog are stripped even if a caller's state
+// object still happens to carry stale copies of them, so nothing can ever
+// write them back into the document by accident.
 async function saveState(state) {
   try {
-    const { error } = await supabase
+    const { buildings, units, assignments, users } = state;
+    const currentVersion = state.version || 1;
+    const { data, error } = await supabase
       .from("app_state")
-      .update({ data: state, updated_at: new Date().toISOString() })
-      .eq("id", STATE_ROW_ID);
+      .update({ data: { buildings, units, assignments, users }, version: currentVersion + 1, updated_at: new Date().toISOString() })
+      .eq("id", STATE_ROW_ID)
+      .eq("version", currentVersion)
+      .select("version");
     if (error) throw error;
+    if (!data || data.length === 0) {
+      // Someone else's save landed first — our snapshot is stale. Refusing
+      // to overwrite is the whole point; the caller is responsible for
+      // reloading before the user's next edit lands.
+      return { ok: false, conflict: true };
+    }
+    return { ok: true, version: data[0].version };
   } catch (e) {
     console.error("Save failed", e);
+    return { ok: false, conflict: false };
   }
 }
 
-// Every device subscribes to the singleton row. When any other device writes,
-// this fires and lets the app refresh itself so the second device sees the
-// change without a manual reload. The unsubscribe returned is called on
-// unmount to clean up the socket.
-function subscribeToState(onChange) {
+async function fetchCrmAndLog() {
+  const [crmRes, logRes] = await Promise.all([
+    supabase.from("crm_state").select("*"),
+    supabase.from("call_log").select("*").order("created_at", { ascending: true }),
+  ]);
+  const crm = {};
+  (crmRes.data || []).forEach(row => {
+    crm[row.unit_key] = {
+      bucket: row.bucket, notes: row.notes, noAnswerCount: row.no_answer_count,
+      nextActionDate: row.next_action_date, tag: row.tag,
+      lastOutcome: row.last_outcome, lastCallDate: row.last_call_date,
+    };
+  });
+  const callLog = (logRes.data || []).map(row => ({
+    unit: row.unit_key, agent: row.agent, outcome: row.outcome, timestamp: row.created_at,
+  }));
+  return { crm, callLog };
+}
+
+async function upsertCrmState(unitKey, crm) {
+  try {
+    const { error } = await supabase.from("crm_state").upsert({
+      unit_key: unitKey,
+      bucket: crm.bucket || "toBeCalled",
+      notes: crm.notes || "",
+      no_answer_count: crm.noAnswerCount || 0,
+      next_action_date: crm.nextActionDate || null,
+      tag: crm.tag || null,
+      last_outcome: crm.lastOutcome || null,
+      last_call_date: crm.lastCallDate || null,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.error("crm_state save failed", e);
+  }
+}
+
+async function insertCallLogEntry(entry) {
+  try {
+    const { error } = await supabase.from("call_log").insert({
+      unit_key: entry.unit, agent: entry.agent, outcome: entry.outcome, created_at: entry.timestamp,
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.error("call_log insert failed", e);
+  }
+}
+
+async function clearCrmAndLog() {
+  try {
+    await Promise.all([
+      supabase.from("crm_state").delete().neq("unit_key", ""),
+      supabase.from("call_log").delete().neq("id", -1),
+    ]);
+  } catch (e) {
+    console.error("clearCrmAndLog failed", e);
+  }
+}
+
+// Every device subscribes to changes on all three tables so every tab stays
+// live without a manual reload — this is the piece that was silently
+// missing before (app_state was never added to the realtime publication),
+// which is exactly how two people's work could overwrite each other with
+// neither seeing the other's changes first.
+function subscribeToState(onBlobChange, onCrmChange, onLogInsert) {
   const channel = supabase
-    .channel("app_state_singleton")
+    .channel("app_state_all")
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "app_state", filter: `id=eq.${STATE_ROW_ID}` },
       (payload) => {
-        if (payload.new && payload.new.data) onChange(payload.new.data);
+        if (payload.new && payload.new.data) onBlobChange(payload.new.data, payload.new.version);
       }
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "crm_state" },
+      (payload) => { if (payload.new) onCrmChange(payload.new); }
+    )
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "call_log" },
+      (payload) => { if (payload.new) onLogInsert(payload.new); }
     )
     .subscribe();
   return () => supabase.removeChannel(channel);
@@ -454,43 +554,80 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [loggedInUsername, setLoggedInUsername] = useState(() => localStorage.getItem("der-crm-user") || null);
   const [saving, setSaving] = useState(false);
+  // Someone else's admin-side save (buildings/units/assignments/users) landed
+  // before ours did. Rather than silently overwrite it — the exact failure
+  // mode that caused a real data-loss incident — refuse further saves and
+  // tell the user to reload before making more changes.
+  const [conflict, setConflict] = useState(false);
 
   const saveTimerRef = useRef(null);
   const pendingStateRef = useRef(null);
-  // Every write we make bumps a token; when the realtime channel echoes our
-  // own write back, the token on the incoming row matches ours and we skip
-  // applying it. This stops the "save then receive my own save then re-save"
-  // feedback loop that otherwise happens on every edit.
-  const localWriteTokenRef = useRef(0);
 
   useEffect(() => {
     loadState().then(s => { setState(s); setLoading(false); });
-    const unsub = subscribeToState((remote) => {
-      // Ignore an echo of our own most recent write.
-      if (remote && remote.__writeToken === localWriteTokenRef.current) return;
-      setState(remote);
-    });
+    const unsub = subscribeToState(
+      // Another client saved buildings/units/assignments/users.
+      (blobData, version) => {
+        setState(prev => prev && { ...prev, ...blobData, version });
+      },
+      // A crm_state row was inserted/updated (by anyone, including us — see
+      // the dedupe note on call_log below; crm_state upserts are idempotent
+      // so re-applying our own echo is harmless).
+      (crmRow) => {
+        setState(prev => prev && {
+          ...prev,
+          crm: {
+            ...prev.crm,
+            [crmRow.unit_key]: {
+              bucket: crmRow.bucket, notes: crmRow.notes, noAnswerCount: crmRow.no_answer_count,
+              nextActionDate: crmRow.next_action_date, tag: crmRow.tag,
+              lastOutcome: crmRow.last_outcome, lastCallDate: crmRow.last_call_date,
+            },
+          },
+        });
+      },
+      // A call_log row was inserted. Skip it if it looks like the echo of an
+      // entry we already appended optimistically ourselves.
+      (logRow) => {
+        setState(prev => {
+          if (!prev) return prev;
+          const entry = { unit: logRow.unit_key, agent: logRow.agent, outcome: logRow.outcome, timestamp: logRow.created_at };
+          const isEcho = (prev.callLog || []).some(e =>
+            e.unit === entry.unit && e.agent === entry.agent && e.outcome === entry.outcome && e.timestamp === entry.timestamp);
+          if (isEcho) return prev;
+          return { ...prev, callLog: [...(prev.callLog || []), entry] };
+        });
+      }
+    );
     return unsub;
   }, []);
 
-  // Every user action calls persist(nextState). We update local state
-  // immediately for snappy UI, then debounce the actual DB write by 400ms so
-  // that a burst of rapid edits (typing in a notes field, for example)
-  // collapses to a single write instead of one per keystroke.
+  // Buildings/units/assignments/users ONLY. CRM notes/bucket and the call
+  // log never pass through here — they save themselves directly to
+  // crm_state/call_log (see saveCrmEntry/saveLogEntry passed to UserApp) the
+  // moment they happen, instead of being batched into a whole-document save
+  // that something else could race against.
   const persist = (next) => {
-    localWriteTokenRef.current += 1;
-    const stamped = { ...next, __writeToken: localWriteTokenRef.current };
-    setState(stamped);
-    pendingStateRef.current = stamped;
+    if (conflict) return; // stale snapshot — reload before saving anything else
+    setState(next);
+    pendingStateRef.current = next;
     setSaving(true);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       const toSave = pendingStateRef.current;
       pendingStateRef.current = null;
       saveTimerRef.current = null;
-      await saveState(toSave);
+      const result = await saveState(toSave);
       setSaving(false);
+      if (result.conflict) setConflict(true);
+      else if (result.ok) setState(prev => prev && { ...prev, version: result.version });
     }, 400);
+  };
+
+  // Local-only update, no network write — used for crm/callLog, which
+  // persist themselves directly (see above).
+  const setLocalState = (updater) => {
+    setState(prev => prev && (typeof updater === "function" ? updater(prev) : updater));
   };
 
   if (loading) {
@@ -511,9 +648,23 @@ export default function App() {
   return (
     <div className="rcrm" style={{ height: "100vh", overflow: "hidden", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <style>{THEME}</style>
+      {conflict && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 20 }}>
+          <div style={{ background: "var(--panel)", border: "1px solid var(--accent)", borderRadius: 10, padding: 32, maxWidth: 380, textAlign: "center" }}>
+            <div className="disp" style={{ fontSize: 18, fontWeight: 800, marginBottom: 12 }}>Someone else just saved changes here</div>
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 22, lineHeight: 1.5 }}>
+              To avoid overwriting their update, this tab has paused saving. Reload to pick up the latest data, then redo your last change.
+            </div>
+            <button onClick={() => window.location.reload()} className="tap"
+              style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 6, padding: "11px 22px", fontSize: 12.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+              Reload
+            </button>
+          </div>
+        </div>
+      )}
       {currentUser.role === "admin"
         ? <AdminApp state={state} setState={persist} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />
-        : <UserApp state={state} setState={persist} user={currentUser.username} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />}
+        : <UserApp state={state} setState={setLocalState} user={currentUser.username} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />}
     </div>
   );
 }
@@ -664,7 +815,13 @@ function AdminApp({ state, setState, onLogout, saving }) {
   const [confirmingWipe, setConfirmingWipe] = useState(false);
   const buildings = Object.values(state.buildings);
 
-  const wipeAll = () => setState({ buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: state.users });
+  // crm/callLog live in their own tables now, not the blob this setState
+  // call saves — clear those out too, or "wipe data" would leave every call
+  // note and log entry behind.
+  const wipeAll = () => {
+    setState({ ...state, buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: state.users });
+    clearCrmAndLog();
+  };
 
   return (
     <>
@@ -985,12 +1142,22 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     const newUnits = {};
     Object.entries(state.units).forEach(([k, u]) => { if (u.buildingId !== buildingId) newUnits[k] = u; });
     const newCrm = {};
-    Object.entries(state.crm).forEach(([k, c]) => { if (!k.startsWith(`${buildingId}::`)) newCrm[k] = c; });
+    const removedKeys = [];
+    Object.entries(state.crm).forEach(([k, c]) => {
+      if (k.startsWith(`${buildingId}::`)) removedKeys.push(k); else newCrm[k] = c;
+    });
     const newAssignments = { ...state.assignments };
     delete newAssignments[buildingId];
     const newBuildings = { ...state.buildings };
     delete newBuildings[buildingId];
     setState({ ...state, buildings: newBuildings, units: newUnits, crm: newCrm, assignments: newAssignments });
+    // crm/callLog for this building's units live in their own tables now —
+    // clear those rows too, or they'd be orphaned (and would reappear if the
+    // building/unit IDs were ever reused).
+    if (removedKeys.length) {
+      supabase.from("crm_state").delete().in("unit_key", removedKeys).then(({ error }) => { if (error) console.error("crm_state cleanup failed", error); });
+      supabase.from("call_log").delete().in("unit_key", removedKeys).then(({ error }) => { if (error) console.error("call_log cleanup failed", error); });
+    }
     if (targetBuilding === buildingId) setTargetBuilding("");
   };
 
@@ -1649,14 +1816,30 @@ function UserApp({ state, setState, user, onLogout, saving }) {
     return { buildings, units };
   }, [portfolioAccess, state.buildings, state.units]);
 
+  // Each of these updates local state immediately (snappy UI, and every
+  // other open tab picks it up over realtime a moment later) and writes
+  // straight to crm_state/call_log itself — never through the admin-side
+  // whole-blob persist(). Two agents touching different units, or even the
+  // same one, each land their own row-level write; neither can silently
+  // erase the other's.
+  const crmSaveTimersRef = useRef({});
+  const saveCrmDebounced = (key, crm) => {
+    clearTimeout(crmSaveTimersRef.current[key]);
+    crmSaveTimersRef.current[key] = setTimeout(() => upsertCrmState(key, crm), 500);
+  };
+
   const updateCrm = (key, nextCrmPartial) => {
     const crm = { ...(state.crm[key] || defaultCrm()), ...nextCrmPartial };
     setState({ ...state, crm: { ...state.crm, [key]: crm } });
+    saveCrmDebounced(key, crm); // e.g. notes — typed keystroke by keystroke, so debounced
   };
   const logOutcome = (key, outcome) => {
     const crm = applyOutcome(state.crm[key] || defaultCrm(), outcome);
     const entry = { unit: key, agent: user, outcome, timestamp: new Date().toISOString() };
     setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: [...(state.callLog || []), entry] });
+    clearTimeout(crmSaveTimersRef.current[key]);
+    upsertCrmState(key, crm); // discrete click, not a keystroke — no need to debounce
+    insertCallLogEntry(entry);
   };
   // Deliberate manual override for a misclick — pulls a unit out of
   // whichever bucket it landed in (Call Me Back, No Answer, Reject, Active)
@@ -1674,6 +1857,8 @@ function UserApp({ state, setState, user, onLogout, saving }) {
       noAnswerCount: prev.lastOutcome === "noAnswer" ? Math.max(0, (prev.noAnswerCount || 0) - 1) : (prev.noAnswerCount || 0),
     };
     setState({ ...state, crm: { ...state.crm, [key]: crm } });
+    clearTimeout(crmSaveTimersRef.current[key]);
+    upsertCrmState(key, crm);
   };
 
   return (
