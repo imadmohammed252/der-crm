@@ -431,7 +431,7 @@ async function fetchCrmAndLog() {
     };
   });
   const callLog = (logRes.data || []).map(row => ({
-    unit: row.unit_key, agent: row.agent, outcome: row.outcome, timestamp: row.created_at,
+    unit: row.unit_key, agent: row.agent, outcome: row.outcome, timestamp: row.created_at, counted: row.counted,
   }));
   return { crm, callLog };
 }
@@ -459,10 +459,34 @@ async function insertCallLogEntry(entry) {
   try {
     const { error } = await supabase.from("call_log").insert({
       unit_key: entry.unit, agent: entry.agent, outcome: entry.outcome, created_at: entry.timestamp,
+      counted: entry.counted !== false,
     });
     if (error) throw error;
   } catch (e) {
     console.error("call_log insert failed", e);
+  }
+}
+
+// "Calls made" only counts a tile actually leaving the To Be Called queue.
+// If it's moved back into that queue the same day (misclick undo, or the
+// agent decides it shouldn't have been actioned), the credit for whichever
+// call put it there is retracted — the row stays in call_log for history,
+// it just stops counting toward the tracking totals.
+async function uncountTodaysCallForUnit(unitKey) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  try {
+    const { data, error } = await supabase.from("call_log").select("id")
+      .eq("unit_key", unitKey).eq("counted", true)
+      .gte("created_at", startOfDay.toISOString())
+      .order("created_at", { ascending: false }).limit(1);
+    if (error) throw error;
+    if (data && data[0]) {
+      const { error: updErr } = await supabase.from("call_log").update({ counted: false }).eq("id", data[0].id);
+      if (updErr) throw updErr;
+    }
+  } catch (e) {
+    console.error("call_log uncount failed", e);
   }
 }
 
@@ -482,7 +506,7 @@ async function clearCrmAndLog() {
 // missing before (app_state was never added to the realtime publication),
 // which is exactly how two people's work could overwrite each other with
 // neither seeing the other's changes first.
-function subscribeToState(onBlobChange, onCrmChange, onLogInsert) {
+function subscribeToState(onBlobChange, onCrmChange, onLogInsert, onLogUpdate) {
   const channel = supabase
     .channel("app_state_all")
     .on(
@@ -501,6 +525,11 @@ function subscribeToState(onBlobChange, onCrmChange, onLogInsert) {
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "call_log" },
       (payload) => { if (payload.new) onLogInsert(payload.new); }
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "call_log" },
+      (payload) => { if (payload.new) onLogUpdate(payload.new); }
     )
     .subscribe();
   return () => supabase.removeChannel(channel);
@@ -591,11 +620,25 @@ export default function App() {
       (logRow) => {
         setState(prev => {
           if (!prev) return prev;
-          const entry = { unit: logRow.unit_key, agent: logRow.agent, outcome: logRow.outcome, timestamp: logRow.created_at };
+          const entry = { unit: logRow.unit_key, agent: logRow.agent, outcome: logRow.outcome, timestamp: logRow.created_at, counted: logRow.counted };
           const isEcho = (prev.callLog || []).some(e =>
             e.unit === entry.unit && e.agent === entry.agent && e.outcome === entry.outcome && e.timestamp === entry.timestamp);
           if (isEcho) return prev;
           return { ...prev, callLog: [...(prev.callLog || []), entry] };
+        });
+      },
+      // A call_log row's `counted` flag flipped elsewhere (the same-day
+      // move-back-to-queue failsafe firing on another tab/device) — mirror
+      // it locally so every open Tracking view stays in sync.
+      (logRow) => {
+        setState(prev => {
+          if (!prev) return prev;
+          const callLog = (prev.callLog || []).map(e =>
+            (e.unit === logRow.unit_key && e.agent === logRow.agent && e.outcome === logRow.outcome && e.timestamp === logRow.created_at)
+              ? { ...e, counted: logRow.counted }
+              : e
+          );
+          return { ...prev, callLog };
         });
       }
     );
@@ -875,7 +918,11 @@ function TrackingPanel({ state }) {
   const [rangeEnd, setRangeEnd] = useState("");
   const [rangeApplied, setRangeApplied] = useState(null);
 
-  const log = state.callLog || [];
+  // Only rows that actually moved a tile out of the To Be Called queue (and
+  // weren't reversed the same day) count toward "calls made" — see
+  // logOutcome/moveToQueue. Older rows predate this flag and default to
+  // counted:true, so past totals are unaffected.
+  const log = (state.callLog || []).filter(c => c.counted !== false);
 
   const singleDateCalls = useMemo(() => {
     if (!singleDate) return [];
@@ -1842,8 +1889,17 @@ function UserApp({ state, setState, user, onLogout, saving }) {
     const now = Date.now();
     if (now - (lastOutcomeLogRef.current[key] || 0) < 1200) return;
     lastOutcomeLogRef.current[key] = now;
-    const crm = applyOutcome(state.crm[key] || defaultCrm(), outcome);
-    const entry = { unit: key, agent: user, outcome, timestamp: new Date().toISOString() };
+    const prevCrm = state.crm[key] || defaultCrm();
+    // "Calls made" tracking only credits a call when it actually moves the
+    // tile out of the To Be Called queue — including a resurfaced unit
+    // (Call Me Back/Unreachable/Cold whose next-action date is due, so it's
+    // sitting back in the queue even though its stored bucket never left).
+    // Logging an outcome on something that wasn't in the queue at all (e.g.
+    // reworking a Declined unit from Explorer/Lookup before it's due) still
+    // saves normally, it just isn't counted toward the tracking total.
+    const wasInQueue = effectiveBucket(prevCrm).display === "toBeCalled";
+    const crm = applyOutcome(prevCrm, outcome);
+    const entry = { unit: key, agent: user, outcome, timestamp: new Date().toISOString(), counted: wasInQueue };
     setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: [...(state.callLog || []), entry] });
     clearTimeout(crmSaveTimersRef.current[key]);
     upsertCrmState(key, crm); // discrete click, not a keystroke — no need to debounce
@@ -1854,7 +1910,9 @@ function UserApp({ state, setState, user, onLogout, saving }) {
   // and back into To Be Called. Notes and call history stay intact; only
   // the bucket/date/tag reset. If the last thing logged was a No Answer,
   // that single count is rolled back too, since a misclick shouldn't count
-  // as a real missed call.
+  // as a real missed call. Same-day failsafe: whichever call most recently
+  // moved this tile out of the queue today has its tracking credit retracted
+  // too, so "calls made" doesn't count a tile that just bounced back in.
   const moveToQueue = (key) => {
     const prev = state.crm[key] || defaultCrm();
     const crm = {
@@ -1864,9 +1922,21 @@ function UserApp({ state, setState, user, onLogout, saving }) {
       tag: null,
       noAnswerCount: prev.lastOutcome === "noAnswer" ? Math.max(0, (prev.noAnswerCount || 0) - 1) : (prev.noAnswerCount || 0),
     };
-    setState({ ...state, crm: { ...state.crm, [key]: crm } });
+    const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+    let reversed = false;
+    const callLog = (state.callLog || []).slice();
+    for (let i = callLog.length - 1; i >= 0; i--) {
+      const e = callLog[i];
+      if (e.unit === key && e.counted !== false && new Date(e.timestamp) >= startOfDay) {
+        callLog[i] = { ...e, counted: false };
+        reversed = true;
+        break;
+      }
+    }
+    setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: reversed ? callLog : state.callLog });
     clearTimeout(crmSaveTimersRef.current[key]);
     upsertCrmState(key, crm);
+    if (reversed) uncountTodaysCallForUnit(key);
   };
 
   return (
