@@ -592,6 +592,18 @@ export default function App() {
   const saveTimerRef = useRef(null);
   const pendingStateRef = useRef(null);
 
+  // Guards against the realtime echo of our own crm_state write clobbering
+  // whatever the agent has typed since. Notes are debounced 500ms, then the
+  // save round-trips through Supabase and comes back as a realtime UPDATE —
+  // if the agent kept typing during that ~0.5-1s window, applying the echo
+  // wholesale used to overwrite state.crm[key] with the older pre-save
+  // snapshot, visibly rewinding the textarea mid-sentence. Any local write
+  // to a unit's crm marks it here; incoming realtime crm_state changes for
+  // that unit are ignored until it's been quiet for CRM_ECHO_GUARD_MS.
+  const crmEditedAtRef = useRef({});
+  const CRM_ECHO_GUARD_MS = 2000;
+  const markCrmTouched = (key) => { crmEditedAtRef.current[key] = Date.now(); };
+
   useEffect(() => {
     loadState().then(s => { setState(s); setLoading(false); });
     const unsub = subscribeToState(
@@ -599,20 +611,25 @@ export default function App() {
       (blobData, version) => {
         setState(prev => prev && { ...prev, ...blobData, version });
       },
-      // A crm_state row was inserted/updated (by anyone, including us — see
-      // the dedupe note on call_log below; crm_state upserts are idempotent
-      // so re-applying our own echo is harmless).
+      // A crm_state row was inserted/updated (by anyone, including us). Skip
+      // it while this unit has an in-flight local edit — see
+      // crmEditedAtRef above — since it's either a stale echo of an older
+      // snapshot, or redundant with what we already have locally.
       (crmRow) => {
-        setState(prev => prev && {
-          ...prev,
-          crm: {
-            ...prev.crm,
-            [crmRow.unit_key]: {
-              bucket: crmRow.bucket, notes: crmRow.notes, noAnswerCount: crmRow.no_answer_count,
-              nextActionDate: crmRow.next_action_date, tag: crmRow.tag,
-              lastOutcome: crmRow.last_outcome, lastCallDate: crmRow.last_call_date,
+        setState(prev => {
+          if (!prev) return prev;
+          if (Date.now() - (crmEditedAtRef.current[crmRow.unit_key] || 0) < CRM_ECHO_GUARD_MS) return prev;
+          return {
+            ...prev,
+            crm: {
+              ...prev.crm,
+              [crmRow.unit_key]: {
+                bucket: crmRow.bucket, notes: crmRow.notes, noAnswerCount: crmRow.no_answer_count,
+                nextActionDate: crmRow.next_action_date, tag: crmRow.tag,
+                lastOutcome: crmRow.last_outcome, lastCallDate: crmRow.last_call_date,
+              },
             },
-          },
+          };
         });
       },
       // A call_log row was inserted. Skip it if it looks like the echo of an
@@ -707,7 +724,7 @@ export default function App() {
       )}
       {currentUser.role === "admin"
         ? <AdminApp state={state} setState={persist} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />
-        : <UserApp state={state} setState={setLocalState} user={currentUser.username} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />}
+        : <UserApp state={state} setState={setLocalState} markCrmTouched={markCrmTouched} user={currentUser.username} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />}
     </div>
   );
 }
@@ -1807,7 +1824,7 @@ function effectiveAssignedUsers(unit, assignments) {
   return assignments[unit.buildingId] || [];
 }
 
-function UserApp({ state, setState, user, onLogout, saving }) {
+function UserApp({ state, setState, markCrmTouched, user, onLogout, saving }) {
   const [rightPanel, setRightPanel] = useState("detail"); // 'detail' | 'lookup'
   const [buildingToggle, setBuildingToggle] = useState(null);
   const [bucketTab, setBucketTab] = useState("toBeCalled");
@@ -1877,6 +1894,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
 
   const updateCrm = (key, nextCrmPartial) => {
     const crm = { ...(state.crm[key] || defaultCrm()), ...nextCrmPartial };
+    markCrmTouched(key);
     setState({ ...state, crm: { ...state.crm, [key]: crm } });
     saveCrmDebounced(key, crm); // e.g. notes — typed keystroke by keystroke, so debounced
   };
@@ -1900,6 +1918,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
     const wasInQueue = effectiveBucket(prevCrm).display === "toBeCalled";
     const crm = applyOutcome(prevCrm, outcome);
     const entry = { unit: key, agent: user, outcome, timestamp: new Date().toISOString(), counted: wasInQueue };
+    markCrmTouched(key);
     setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: [...(state.callLog || []), entry] });
     clearTimeout(crmSaveTimersRef.current[key]);
     upsertCrmState(key, crm); // discrete click, not a keystroke — no need to debounce
@@ -1933,6 +1952,7 @@ function UserApp({ state, setState, user, onLogout, saving }) {
         break;
       }
     }
+    markCrmTouched(key);
     setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: reversed ? callLog : state.callLog });
     clearTimeout(crmSaveTimersRef.current[key]);
     upsertCrmState(key, crm);
