@@ -9,6 +9,17 @@ import {
   MessageCircle, Mail, Briefcase
 } from "lucide-react";
 
+// A tab left open across a deploy keeps running whatever JS it loaded with —
+// there's no error, it just quietly stops matching what the server expects.
+// That's exactly what happened when an agent's 3-day-old tab kept writing
+// into the pre-migration blob shape after the crm_state/call_log split
+// shipped: no console error, just silent data loss, because the write
+// "succeeded" against a part of the schema the current code no longer reads.
+// STALE_TAB_MS controls how long a tab can sit open before it's nagged to
+// refresh.
+const APP_LOADED_AT = Date.now();
+const STALE_TAB_MS = 6 * 60 * 60 * 1000; // 6 hours
+
 /* ---------------------------------------------------------
    THEME
 --------------------------------------------------------- */
@@ -588,9 +599,20 @@ export default function App() {
   // mode that caused a real data-loss incident — refuse further saves and
   // tell the user to reload before making more changes.
   const [conflict, setConflict] = useState(false);
+  // Nags (doesn't force) a refresh once this tab has been open past
+  // STALE_TAB_MS — see the comment on that constant above.
+  const [staleTab, setStaleTab] = useState(false);
 
   const saveTimerRef = useRef(null);
   const pendingStateRef = useRef(null);
+
+  useEffect(() => {
+    const checkStale = () => { if (Date.now() - APP_LOADED_AT > STALE_TAB_MS) setStaleTab(true); };
+    checkStale();
+    const interval = setInterval(checkStale, 15 * 60 * 1000);
+    document.addEventListener("visibilitychange", checkStale);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", checkStale); };
+  }, []);
 
   // Guards against the realtime echo of our own crm_state write clobbering
   // whatever the agent has typed since. Notes are debounced 500ms, then the
@@ -708,6 +730,19 @@ export default function App() {
   return (
     <div className="rcrm" style={{ height: "100vh", overflow: "hidden", background: "var(--bg)", display: "flex", flexDirection: "column" }}>
       <style>{THEME}</style>
+      {staleTab && (
+        <div style={{ background: "var(--amber)", color: "#000", padding: "8px 16px", display: "flex", alignItems: "center", justifyContent: "center", gap: 14, fontSize: 12.5, fontWeight: 600, flexWrap: "wrap" }}>
+          <span>This tab's been open a long time — refresh to make sure your calls are actually saving.</span>
+          <button onClick={() => window.location.reload()} className="tap"
+            style={{ background: "#000", color: "#fff", border: "none", borderRadius: 5, padding: "5px 12px", fontSize: 11.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Refresh now
+          </button>
+          <button onClick={() => setStaleTab(false)} className="tap"
+            style={{ background: "transparent", border: "1px solid #000", color: "#000", borderRadius: 5, padding: "5px 10px", fontSize: 11.5 }}>
+            Dismiss
+          </button>
+        </div>
+      )}
       {conflict && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: 20 }}>
           <div style={{ background: "var(--panel)", border: "1px solid var(--accent)", borderRadius: 10, padding: 32, maxWidth: 380, textAlign: "center" }}>
