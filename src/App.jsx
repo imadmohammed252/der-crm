@@ -376,9 +376,10 @@ const STATE_ROW_ID = "singleton";
 // instead of silently overwriting when two saves race.
 async function loadState() {
   try {
-    const [blobRes, crmLogRes] = await Promise.all([
+    const [blobRes, crmLogRes, listings] = await Promise.all([
       supabase.from("app_state").select("data, version").eq("id", STATE_ROW_ID).maybeSingle(),
       fetchCrmAndLog(),
+      fetchListings(),
     ]);
     if (blobRes.error) throw blobRes.error;
     const data = blobRes.data;
@@ -394,11 +395,11 @@ async function loadState() {
     // exclusively from crm_state/call_log now (see fetchCrmAndLog).
     delete parsed.crm;
     delete parsed.callLog;
-    return { ...parsed, ...crmLogRes, version };
+    return { ...parsed, ...crmLogRes, listings, version };
   } catch (e) {
     console.error("loadState failed, using empty state:", e);
   }
-  return { buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: DEFAULT_USERS, version: 1 };
+  return { buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], listings: [], users: DEFAULT_USERS, version: 1 };
 }
 
 // Only the blob fields — crm/callLog are stripped even if a caller's state
@@ -506,9 +507,51 @@ async function clearCrmAndLog() {
     await Promise.all([
       supabase.from("crm_state").delete().neq("unit_key", ""),
       supabase.from("call_log").delete().neq("id", -1),
+      supabase.from("listings").delete().neq("id", -1),
     ]);
   } catch (e) {
     console.error("clearCrmAndLog failed", e);
+  }
+}
+
+async function fetchListings() {
+  try {
+    const { data, error } = await supabase.from("listings").select("*").order("logged_at", { ascending: false });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      unitKey: row.unit_key, agent: row.agent, loggedAt: row.logged_at,
+      status: row.status, promotedBy: row.promoted_by, promotedAt: row.promoted_at,
+    }));
+  } catch (e) {
+    console.error("listings fetch failed", e);
+    return [];
+  }
+}
+
+// A "Yes" outcome opens a listing for that unit with the logging agent's name
+// locked in. ignoreDuplicates means only the FIRST "Yes" a unit ever gets
+// creates this row — re-logging Yes later, or a different agent touching the
+// same unit afterward, can never overwrite who actually landed it.
+async function insertListingIfNew(unitKey, agent) {
+  try {
+    const { error } = await supabase.from("listings").upsert(
+      { unit_key: unitKey, agent, status: "positive", logged_at: new Date().toISOString() },
+      { onConflict: "unit_key", ignoreDuplicates: true }
+    );
+    if (error) throw error;
+  } catch (e) {
+    console.error("listings insert failed", e);
+  }
+}
+
+async function promoteListingToLead(unitKey, adminUsername) {
+  try {
+    const { error } = await supabase.from("listings")
+      .update({ status: "lead", promoted_by: adminUsername, promoted_at: new Date().toISOString() })
+      .eq("unit_key", unitKey);
+    if (error) throw error;
+  } catch (e) {
+    console.error("listings promote failed", e);
   }
 }
 
@@ -517,7 +560,7 @@ async function clearCrmAndLog() {
 // missing before (app_state was never added to the realtime publication),
 // which is exactly how two people's work could overwrite each other with
 // neither seeing the other's changes first.
-function subscribeToState(onBlobChange, onCrmChange, onLogInsert, onLogUpdate) {
+function subscribeToState(onBlobChange, onCrmChange, onLogInsert, onLogUpdate, onListingChange) {
   const channel = supabase
     .channel("app_state_all")
     .on(
@@ -541,6 +584,11 @@ function subscribeToState(onBlobChange, onCrmChange, onLogInsert, onLogUpdate) {
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "call_log" },
       (payload) => { if (payload.new) onLogUpdate(payload.new); }
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "listings" },
+      (payload) => { if (payload.new) onListingChange(payload.new); }
     )
     .subscribe();
   return () => supabase.removeChannel(channel);
@@ -679,6 +727,24 @@ export default function App() {
           );
           return { ...prev, callLog };
         });
+      },
+      // A listings row was inserted (a fresh "Yes") or updated (an admin
+      // promoted it to a Lead) elsewhere. Merge by unit_key; insert if we
+      // don't have it yet (skip an echo of our own optimistic insert).
+      (row) => {
+        setState(prev => {
+          if (!prev) return prev;
+          const listings = prev.listings || [];
+          const idx = listings.findIndex(l => l.unitKey === row.unit_key);
+          const next = {
+            unitKey: row.unit_key, agent: row.agent, loggedAt: row.logged_at,
+            status: row.status, promotedBy: row.promoted_by, promotedAt: row.promoted_at,
+          };
+          if (idx === -1) return { ...prev, listings: [next, ...listings] };
+          if (listings[idx].status === next.status && listings[idx].promotedAt === next.promotedAt) return prev;
+          const copy = listings.slice(); copy[idx] = next;
+          return { ...prev, listings: copy };
+        });
       }
     );
     return unsub;
@@ -706,8 +772,8 @@ export default function App() {
     }, 400);
   };
 
-  // Local-only update, no network write — used for crm/callLog, which
-  // persist themselves directly (see above).
+  // Local-only update, no network write — used for crm/callLog/listings,
+  // which persist themselves directly (see above).
   const setLocalState = (updater) => {
     setState(prev => prev && (typeof updater === "function" ? updater(prev) : updater));
   };
@@ -758,7 +824,7 @@ export default function App() {
         </div>
       )}
       {currentUser.role === "admin"
-        ? <AdminApp state={state} setState={persist} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />
+        ? <AdminApp state={state} setState={persist} setLocalState={setLocalState} adminUsername={currentUser.username} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />
         : <UserApp state={state} setState={setLocalState} markCrmTouched={markCrmTouched} user={currentUser.username} onLogout={() => { localStorage.removeItem("der-crm-user"); setLoggedInUsername(null); }} saving={saving} />}
     </div>
   );
@@ -905,16 +971,16 @@ function TopBar({ title, subtitle, right, onLogout, saving, extraMenuItems }) {
 /* ---------------------------------------------------------
    ADMIN APP
 --------------------------------------------------------- */
-function AdminApp({ state, setState, onLogout, saving }) {
+function AdminApp({ state, setState, setLocalState, adminUsername, onLogout, saving }) {
   const [tab, setTab] = useState("buildings");
   const [confirmingWipe, setConfirmingWipe] = useState(false);
   const buildings = Object.values(state.buildings);
 
-  // crm/callLog live in their own tables now, not the blob this setState
-  // call saves — clear those out too, or "wipe data" would leave every call
-  // note and log entry behind.
+  // crm/callLog/listings live in their own tables now, not the blob this
+  // setState call saves — clear those out too, or "wipe data" would leave
+  // every call note, log entry, and listing behind.
   const wipeAll = () => {
-    setState({ ...state, buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], users: state.users });
+    setState({ ...state, buildings: {}, units: {}, assignments: {}, crm: {}, callLog: [], listings: [], users: state.users });
     clearCrmAndLog();
   };
 
@@ -941,7 +1007,7 @@ function AdminApp({ state, setState, onLogout, saving }) {
         </div>
       )}
       <div style={{ display: "flex", borderBottom: "1px solid var(--line)", background: "var(--panel)" }}>
-{[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"], ["tracking", "Tracking"], ["explorer", "Explorer"], ["portfolio", "Portfolio Desk"]].map(([id, label]) => (          <button key={id} onClick={() => setTab(id)} className="tap"
+{[["buildings", "Buildings & Upload"], ["assign", "Assignments"], ["users", "Users"], ["tracking", "Tracking"], ["listings", "Listings"], ["explorer", "Explorer"], ["portfolio", "Portfolio Desk"]].map(([id, label]) => (          <button key={id} onClick={() => setTab(id)} className="tap"
             style={{
               padding: "13px 18px", background: "transparent", border: "none",
               borderBottom: tab === id ? "1px solid var(--accent)" : "1px solid transparent",
@@ -955,6 +1021,7 @@ function AdminApp({ state, setState, onLogout, saving }) {
         {tab === "assign" && <AssignmentPanel state={state} setState={setState} />}
         {tab === "users" && <UsersPanel state={state} setState={setState} />}
         {tab === "tracking" && <TrackingPanel state={state} />}
+        {tab === "listings" && <ListingsPanel state={state} setLocalState={setLocalState} adminUsername={adminUsername} />}
         {tab === "explorer" && <BuildingExplorer state={state} role="admin" />}
         {tab === "portfolio" && <PortfolioDashboard state={state} />}
       </div>
@@ -1109,6 +1176,159 @@ function StatsBlock({ calls, users, state }) {
   );
 }
 
+// Positive ("Yes") logs feed this queue automatically the moment an agent
+// logs them (see UserApp's logOutcome). Admins promote them into leads here
+// — the only write this panel makes locally is via setLocalState, since
+// listings live in their own table just like crm/callLog.
+function ListingsPanel({ state, setLocalState, adminUsername }) {
+  const listings = state.listings || [];
+  const positiveLogs = listings.filter(l => l.status === "positive").sort((a, b) => new Date(b.loggedAt) - new Date(a.loggedAt));
+  const leads = listings.filter(l => l.status === "lead").sort((a, b) => new Date(b.promotedAt || b.loggedAt) - new Date(a.promotedAt || a.loggedAt));
+
+  const promote = (unitKey) => {
+    setLocalState(prev => ({
+      ...prev,
+      listings: (prev.listings || []).map(l =>
+        l.unitKey === unitKey ? { ...l, status: "lead", promotedBy: adminUsername, promotedAt: new Date().toISOString() } : l
+      ),
+    }));
+    promoteListingToLead(unitKey, adminUsername);
+  };
+
+  // Last 14 days of listings activity: positive logs (by loggedAt) vs leads
+  // promoted (by promotedAt), one bar-pair per day — kept separate from the
+  // Tracking page's call stats since this is specifically listings activity.
+  const days = useMemo(() => {
+    const out = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+      out.push(d);
+    }
+    return out;
+  }, []);
+  const dayStats = useMemo(() => days.map(d => {
+    const dayStr = d.toDateString();
+    return {
+      date: d,
+      positiveCount: listings.filter(l => new Date(l.loggedAt).toDateString() === dayStr).length,
+      leadCount: listings.filter(l => l.promotedAt && new Date(l.promotedAt).toDateString() === dayStr).length,
+    };
+  }), [days, listings]);
+  const maxVal = Math.max(1, ...dayStats.map(d => Math.max(d.positiveCount, d.leadCount)));
+
+  const unitLabel = (unitKey) => {
+    const unit = state.units[unitKey];
+    if (!unit) return { line1: unitKey, line2: "Unit removed" };
+    const building = state.buildings[unit.buildingId];
+    return { line1: `${building?.name || "—"} · ${unit.unitId}`, line2: unit.ownerName || "" };
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 28, maxWidth: 900 }}>
+      <div style={{ display: "flex", gap: 16 }}>
+        <div style={{ flex: 1, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Positive logs</div>
+          <div style={{ fontSize: 48, fontWeight: 800, lineHeight: 1, color: "var(--green)" }}>{listings.length}</div>
+        </div>
+        <div style={{ flex: 1, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: 20 }}>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Leads</div>
+          <div style={{ fontSize: 48, fontWeight: 800, lineHeight: 1, color: "var(--accent)" }}>{leads.length}</div>
+        </div>
+      </div>
+
+      <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 8, padding: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Listings activity — last 14 days</div>
+          <div style={{ display: "flex", gap: 16, fontSize: 11.5, color: "var(--text-dim)" }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--green)" }} /> Positive logs</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: "var(--accent)" }} /> Leads</span>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 140 }}>
+          {dayStats.map((d, i) => (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, height: "100%", justifyContent: "flex-end" }}>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 110 }}>
+                <div title={`${d.positiveCount} positive log${d.positiveCount === 1 ? "" : "s"}`}
+                  style={{ width: 8, height: `${(d.positiveCount / maxVal) * 100}%`, minHeight: d.positiveCount ? 3 : 0, background: "var(--green)", borderRadius: "2px 2px 0 0" }} />
+                <div title={`${d.leadCount} lead${d.leadCount === 1 ? "" : "s"}`}
+                  style={{ width: 8, height: `${(d.leadCount / maxVal) * 100}%`, minHeight: d.leadCount ? 3 : 0, background: "var(--accent)", borderRadius: "2px 2px 0 0" }} />
+              </div>
+              <div style={{ fontSize: 9.5, color: "var(--text-faint)" }}>{d.date.toLocaleDateString(undefined, { day: "numeric" })}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+          Positive logs awaiting promotion ({positiveLogs.length})
+        </div>
+        {positiveLogs.length === 0 ? (
+          <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "14px 0" }}>No positive logs waiting right now.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {positiveLogs.map(l => {
+              const { line1, line2 } = unitLabel(l.unitKey);
+              return (
+                <div key={l.unitKey} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "12px 16px", flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="mono" style={{ fontSize: 13.5, fontWeight: 600 }}>{line1}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{line2 || <em style={{ color: "var(--text-faint)" }}>owner not available</em>}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 16, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 12, color: "var(--text)" }}>{state.users[l.agent]?.displayName || l.agent}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-faint)" }}>{fmtDate(l.loggedAt)}</div>
+                    </div>
+                    <button onClick={() => promote(l.unitKey)} className="tap"
+                      style={{ background: "var(--accent)", border: "none", color: "#fff", padding: "8px 14px", borderRadius: 6, fontSize: 11.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+                      Promote to Lead
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+          Leads ({leads.length})
+        </div>
+        {leads.length === 0 ? (
+          <div style={{ color: "var(--text-dim)", fontSize: 13, padding: "14px 0" }}>No leads yet.</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {leads.map(l => {
+              const { line1, line2 } = unitLabel(l.unitKey);
+              return (
+                <div key={l.unitKey} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 6, padding: "12px 16px", flexWrap: "wrap" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="mono" style={{ fontSize: 13.5, fontWeight: 600 }}>{line1}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>{line2 || <em style={{ color: "var(--text-faint)" }}>owner not available</em>}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 20, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 10.5, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Logged by</div>
+                      <div style={{ fontSize: 12, color: "var(--text)" }}>{state.users[l.agent]?.displayName || l.agent}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 10.5, color: "var(--text-faint)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Promoted by</div>
+                      <div style={{ fontSize: 12, color: "var(--text)" }}>{state.users[l.promotedBy]?.displayName || l.promotedBy} · {fmtDate(l.promotedAt)}</div>
+                    </div>
+                    <span style={{ fontSize: 10.5, padding: "4px 9px", borderRadius: 5, background: "var(--accent)", color: "#fff", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Lead</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const WHEEL_YEARS = [2026, 2027, 2028, 2029, 2030];
 
@@ -1256,6 +1476,7 @@ function BuildingsUpload({ state, setState }) {  const [newBuildingName, setNewB
     if (removedKeys.length) {
       supabase.from("crm_state").delete().in("unit_key", removedKeys).then(({ error }) => { if (error) console.error("crm_state cleanup failed", error); });
       supabase.from("call_log").delete().in("unit_key", removedKeys).then(({ error }) => { if (error) console.error("call_log cleanup failed", error); });
+      supabase.from("listings").delete().in("unit_key", removedKeys).then(({ error }) => { if (error) console.error("listings cleanup failed", error); });
     }
     if (targetBuilding === buildingId) setTargetBuilding("");
   };
@@ -1954,10 +2175,19 @@ function UserApp({ state, setState, markCrmTouched, user, onLogout, saving }) {
     const crm = applyOutcome(prevCrm, outcome);
     const entry = { unit: key, agent: user, outcome, timestamp: new Date().toISOString(), counted: wasInQueue };
     markCrmTouched(key);
-    setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: [...(state.callLog || []), entry] });
+    // A "Yes" opens a listing for the admin's Listings queue, with this
+    // agent's name locked in — but only the first time a unit ever goes
+    // positive (matches the DB's ignoreDuplicates upsert), so re-logging Yes
+    // later never reassigns credit to whoever clicked it that time.
+    const isNewListing = outcome === "yes" && !(state.listings || []).some(l => l.unitKey === key);
+    const listings = isNewListing
+      ? [{ unitKey: key, agent: user, loggedAt: entry.timestamp, status: "positive", promotedBy: null, promotedAt: null }, ...(state.listings || [])]
+      : state.listings;
+    setState({ ...state, crm: { ...state.crm, [key]: crm }, callLog: [...(state.callLog || []), entry], listings });
     clearTimeout(crmSaveTimersRef.current[key]);
     upsertCrmState(key, crm); // discrete click, not a keystroke — no need to debounce
     insertCallLogEntry(entry);
+    if (outcome === "yes") insertListingIfNew(key, user);
   };
   // Deliberate manual override for a misclick — pulls a unit out of
   // whichever bucket it landed in (Call Me Back, No Answer, Reject, Active)
